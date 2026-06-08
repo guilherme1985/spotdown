@@ -789,7 +789,7 @@ body {
 
 .track-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 9px;
   padding: 6px 12px;
   border-bottom: 1px solid rgba(255,255,255,0.03);
@@ -804,12 +804,26 @@ body {
   text-align: center;
   font-size: 11px;
   flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.track-body {
+  flex: 1;
+  min-width: 0;
 }
 
 .track-name {
-  flex: 1;
   font-size: 12px;
   color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-error {
+  font-size: 11px;
+  color: var(--error);
+  margin-top: 1px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

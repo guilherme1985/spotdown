@@ -36,9 +36,15 @@ def test_create_job_invalid_query_type():
 # ── Orquestração: _run_download_phase ─────────────────────────────────────────
 
 async def test_download_phase_counts_results(monkeypatch, tmp_path):
-    """Verifica a contagem done/skipped/failed conforme o retorno de download_track."""
+    """Verifica a contagem done/skipped/failed e a propagação do erro."""
+    from downloader import DownloadResult
+
     def fake_download(artist, title, dest, **kw):
-        return {"ok": True, "exists": None, "fail": False}[title]
+        return {
+            "ok": DownloadResult("done"),
+            "exists": DownloadResult("skipped"),
+            "fail": DownloadResult("failed", "Vídeo indisponível no YouTube"),
+        }[title]
 
     monkeypatch.setattr(api, "download_track", fake_download)
     monkeypatch.setattr(api, "save_job", _noop_save)
@@ -48,9 +54,9 @@ async def test_download_phase_counts_results(monkeypatch, tmp_path):
         "done": 0, "skipped": 0, "failed_count": 0,
         "filename_template": "{artist} - {name}",
         "tracks": [
-            {"artist": "a", "title": "ok", "status": "pending"},
-            {"artist": "a", "title": "exists", "status": "pending"},
-            {"artist": "a", "title": "fail", "status": "pending"},
+            {"artist": "a", "title": "ok", "status": "pending", "error": None},
+            {"artist": "a", "title": "exists", "status": "pending", "error": None},
+            {"artist": "a", "title": "fail", "status": "pending", "error": None},
         ],
     }
     api._jobs["j1"] = job
@@ -66,10 +72,15 @@ async def test_download_phase_counts_results(monkeypatch, tmp_path):
     by_title = {t["title"]: t["status"] for t in job["tracks"]}
     assert by_title == {"ok": "done", "exists": "skipped", "fail": "failed"}
 
+    # a mensagem de erro deve ser propagada para a faixa que falhou
+    failed_track = next(t for t in job["tracks"] if t["title"] == "fail")
+    assert failed_track["error"] == "Vídeo indisponível no YouTube"
+
 
 async def test_download_phase_respects_cancel(monkeypatch, tmp_path):
     """Se o cancel_event já está setado, todas as faixas viram cancelled."""
-    monkeypatch.setattr(api, "download_track", lambda *a, **k: True)
+    from downloader import DownloadResult
+    monkeypatch.setattr(api, "download_track", lambda *a, **k: DownloadResult("done"))
     monkeypatch.setattr(api, "save_job", _noop_save)
 
     job = {
@@ -95,8 +106,9 @@ async def test_run_job_truncates_to_max_tracks(monkeypatch, tmp_path):
     def fake_get(url, query_type):
         return ("MinhaLista", [{"artist": "a", "title": str(i)} for i in range(10)])
 
+    from downloader import DownloadResult
     monkeypatch.setattr(api, "get_playlist_tracks", fake_get)
-    monkeypatch.setattr(api, "download_track", lambda *a, **k: True)
+    monkeypatch.setattr(api, "download_track", lambda *a, **k: DownloadResult("done"))
     monkeypatch.setattr(api, "save_job", _noop_save)
     monkeypatch.setattr(api, "OUTPUT_DIR", str(tmp_path))
 

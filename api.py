@@ -253,6 +253,7 @@ async def _run_job(job_id: str):
                 "cover_url": t.get("cover_url"),
                 "release_date": t.get("release_date"),
                 "status": "pending",
+                "error": None,
             }
             for t in tracks
         ],
@@ -292,16 +293,12 @@ async def _run_download_phase(job: dict, dest_dir: str):
                 filename_template=job.get("filename_template", DEFAULT_TEMPLATE),
             )
 
-        if result is True:
-            track_state["status"] = "done"
-            job["done"] += 1
-        elif result is None:
-            track_state["status"] = "skipped"
-            job["done"] += 1
+        track_state["status"] = result.status
+        track_state["error"] = result.error
+        job["done"] += 1
+        if result.status == "skipped":
             job["skipped"] += 1
-        else:
-            track_state["status"] = "failed"
-            job["done"] += 1
+        elif result.status == "failed":
             job["failed_count"] += 1
 
         await save_job(job)

@@ -488,12 +488,19 @@ function trackListHTML(jobId, tracks) {
         failed:      `<span style="color:var(--error)">✗</span>`,
         cancelled:   `<span style="color:var(--text-dim)">⊘</span>`,
     };
-    const items = tracks.map(t => `
-        <div class="track-item is-${t.status}">
+    const items = tracks.map(t => {
+        const errorHtml = (t.status === 'failed' && t.error)
+            ? `<div class="track-error">${esc(t.error)}</div>`
+            : '';
+        return `
+        <div class="track-item is-${t.status}"${t.error ? ` title="${esc(t.error)}"` : ''}>
             <div class="track-icon">${icons[t.status] || '○'}</div>
-            <div class="track-name">${esc(t.artist)} — ${esc(t.title)}</div>
-        </div>
-    `).join('');
+            <div class="track-body">
+                <div class="track-name">${esc(t.artist)} — ${esc(t.title)}</div>
+                ${errorHtml}
+            </div>
+        </div>`;
+    }).join('');
     return `
         <button class="tracks-toggle" onclick="toggleList('tracks-${jobId}', this)">▾ Faixas (${tracks.length})</button>
         <div class="tracks-list" id="tracks-${jobId}">${items}</div>
