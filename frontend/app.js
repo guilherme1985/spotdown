@@ -1,53 +1,31 @@
-const form          = document.getElementById('form');
-const urlInput      = document.getElementById('url-input');
-const submitBtn     = document.getElementById('submit-btn');
-const limitHint     = document.getElementById('limit-hint');
-const jobsEl        = document.getElementById('jobs');
-const jobsToolbar   = document.getElementById('jobs-toolbar');
-const connectSection = document.getElementById('connect-section');
-const formSection   = document.getElementById('form-section');
-const authIndicator = document.getElementById('auth-indicator');
+const form        = document.getElementById('form');
+const urlInput    = document.getElementById('url-input');
+const submitBtn   = document.getElementById('submit-btn');
+const limitHint   = document.getElementById('limit-hint');
+const jobsEl      = document.getElementById('jobs');
+const jobsToolbar = document.getElementById('jobs-toolbar');
 
 const activeSSE = {};
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
-    const { authenticated } = await fetch('/api/auth/status').then(r => r.json());
-    setAuthState(authenticated);
-
-    if (authenticated) {
-        try {
-            const jobs = await fetch('/api/jobs').then(r => r.json());
-            for (const job of [...jobs].reverse()) {
-                jobsEl.appendChild(buildCard(job));
-                if (!['completed', 'error', 'cancelled'].includes(job.status)) {
-                    startSSE(job.id);
-                }
+    try {
+        const jobs = await fetch('/api/jobs').then(r => r.json());
+        for (const job of [...jobs].reverse()) {
+            jobsEl.appendChild(buildCard(job));
+            if (!['completed', 'error', 'cancelled'].includes(job.status)) {
+                startSSE(job.id);
             }
-            if (jobs.length > 0 && jobs[0].max_tracks) {
-                limitHint.textContent = `Limite: primeiras ${jobs[0].max_tracks} faixas por playlist`;
-            }
-            updateToolbar();
-        } catch { /* server not ready yet */ }
-    }
+        }
+        if (jobs.length > 0 && jobs[0].max_tracks) {
+            limitHint.textContent = `Limite: primeiras ${jobs[0].max_tracks} faixas por playlist`;
+        }
+        updateToolbar();
+    } catch { /* server not ready yet */ }
 })();
 
-function setAuthState(authenticated) {
-    if (authenticated) {
-        connectSection.classList.add('hidden');
-        formSection.classList.remove('hidden');
-        authIndicator.textContent = '● Conectado';
-        authIndicator.classList.remove('hidden');
-    } else {
-        connectSection.classList.remove('hidden');
-        formSection.classList.add('hidden');
-        authIndicator.classList.add('hidden');
-    }
-}
-
 function updateToolbar() {
-    const hasJobs = jobsEl.children.length > 0;
-    jobsToolbar.classList.toggle('hidden', !hasJobs);
+    jobsToolbar.classList.toggle('hidden', jobsEl.children.length === 0);
 }
 
 // ── Form ─────────────────────────────────────────────────────────────────────
@@ -68,10 +46,6 @@ async function createJobFromUrl(url) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url }),
         });
-        if (res.status === 401) {
-            setAuthState(false);
-            throw new Error('Sessão expirada. Reconecte sua conta Spotify.');
-        }
         if (!res.ok) throw new Error((await res.json()).detail || `Erro ${res.status}`);
 
         const job = await res.json();
@@ -150,7 +124,7 @@ function bodyHTML(job, pct) {
         return `<div class="error-msg">${esc(job.error || 'Erro desconhecido')}</div>${actionsHTML(job)}`;
     }
     if (['pending', 'fetching'].includes(job.status)) {
-        return `<div class="fetching-row"><div class="spinner"></div> Buscando faixas na API do Spotify…</div>${actionsHTML(job)}`;
+        return `<div class="fetching-row"><div class="spinner"></div> Buscando faixas no Spotify…</div>${actionsHTML(job)}`;
     }
     if (job.total === 0) return '';
 
@@ -189,20 +163,16 @@ function bodyHTML(job, pct) {
 
 function actionsHTML(job) {
     const btns = [];
-
     if (['downloading', 'fetching'].includes(job.status)) {
         btns.push(`<button class="btn-danger" onclick="cancelJob('${job.id}', this)">Cancelar</button>`);
     }
-
     const retryable = job.tracks.filter(t => ['failed', 'cancelled'].includes(t.status)).length;
     if (['completed', 'cancelled'].includes(job.status) && retryable > 0) {
         btns.push(`<button class="btn-accent" onclick="retryJob('${job.id}', this)">Tentar novamente (${retryable})</button>`);
     }
-
     if (['completed', 'cancelled', 'error'].includes(job.status)) {
         btns.push(`<button class="btn-secondary" onclick="downloadAgain('${job.id}')">Baixar novamente</button>`);
     }
-
     return btns.length > 0 ? `<div class="card-actions">${btns.join('')}</div>` : '';
 }
 
@@ -227,7 +197,7 @@ function trackListHTML(jobId, tracks) {
     `;
 }
 
-// ── Actions ───────────────────────────────────────────────────────────────────
+// ── Global handlers ───────────────────────────────────────────────────────────
 window.toggleList = function (listId, btn) {
     const el = document.getElementById(listId);
     if (!el) return;
@@ -263,14 +233,10 @@ window.downloadAgain = function (jobId) {
 };
 
 window.clearHistory = async function () {
-    const res = await fetch('/api/jobs', { method: 'DELETE' });
-    const { removed } = await res.json();
+    const { removed } = await fetch('/api/jobs', { method: 'DELETE' }).then(r => r.json());
     if (removed === 0) return;
-
-    // Remove cards dos jobs finalizados do DOM
     document.querySelectorAll('.job-card').forEach(card => {
-        const jobId = card.id.replace('job-', '');
-        if (!activeSSE[jobId]) card.remove();
+        if (!activeSSE[card.id.replace('job-', '')]) card.remove();
     });
     updateToolbar();
 };

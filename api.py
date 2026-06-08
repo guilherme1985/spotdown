@@ -7,18 +7,13 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from db import init_db, load_jobs, save_job
 from downloader import download_track
-from spotify_client import (
-    get_auth_url,
-    get_playlist_tracks,
-    handle_callback,
-    is_authenticated,
-)
+from spotify_client import get_playlist_tracks
 
 OUTPUT_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
 MAX_TRACKS = int(os.getenv("MAX_TRACKS_PER_PLAYLIST", "50"))
@@ -44,27 +39,6 @@ async def lifespan(app):
 app = FastAPI(title="SpotDownload API", lifespan=lifespan)
 
 
-# ── Auth ──────────────────────────────────────────────────────────────────────
-
-@app.get("/auth/login")
-async def auth_login():
-    url = await asyncio.to_thread(get_auth_url)
-    return RedirectResponse(url=url)
-
-
-@app.get("/auth/callback")
-@app.get("/callback")
-async def auth_callback(code: str):
-    await asyncio.to_thread(handle_callback, code)
-    return RedirectResponse(url="/")
-
-
-@app.get("/api/auth/status")
-async def auth_status():
-    authenticated = await asyncio.to_thread(is_authenticated)
-    return {"authenticated": authenticated}
-
-
 # ── Jobs ──────────────────────────────────────────────────────────────────────
 
 class JobRequest(BaseModel):
@@ -73,9 +47,6 @@ class JobRequest(BaseModel):
 
 @app.post("/api/jobs")
 async def create_job(req: JobRequest):
-    if not await asyncio.to_thread(is_authenticated):
-        raise HTTPException(status_code=401, detail="Conecte sua conta Spotify primeiro.")
-
     job_id = str(uuid.uuid4())[:8]
     job = {
         "id": job_id,
@@ -114,7 +85,7 @@ async def get_job(job_id: str):
 
 @app.delete("/api/jobs")
 async def clear_history():
-    """Remove do histórico todos os jobs finalizados (completed/cancelled/error)."""
+    """Remove do histórico todos os jobs finalizados."""
     finished = [
         jid for jid, j in _jobs.items()
         if j["status"] in ("completed", "cancelled", "error")
