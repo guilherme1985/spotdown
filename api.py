@@ -92,6 +92,7 @@ class JobRequest(BaseModel):
     filename_template: str = DEFAULT_TEMPLATE
     query_type: Literal["url", "artist", "album", "mood"] = "url"
     max_tracks: int | None = None  # None = usa o valor do env MAX_TRACKS_PER_PLAYLIST
+    select_tracks: bool = False    # se True, pausa para o usuário escolher as faixas
 
 
 @app.post("/api/jobs")
@@ -114,6 +115,7 @@ async def create_job(req: JobRequest):
         "filename_template": req.filename_template,
         "query_type": req.query_type,
         "max_tracks": max(1, min(req.max_tracks, 500)) if req.max_tracks else MAX_TRACKS,
+        "select_tracks": req.select_tracks,
         "created_at": datetime.now().isoformat(),
     }
     _jobs[job_id] = job
@@ -208,6 +210,38 @@ async def retry_job(job_id: str):
     return job
 
 
+class StartRequest(BaseModel):
+    selected: list[int]
+
+
+@app.post("/api/jobs/{job_id}/start")
+async def start_job(job_id: str, req: StartRequest):
+    """Inicia o download apenas das faixas selecionadas (job em awaiting_selection)."""
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+    if job["status"] != "awaiting_selection":
+        raise HTTPException(status_code=400, detail="Job não está aguardando seleção")
+
+    selected = set(req.selected)
+    if not selected:
+        raise HTTPException(status_code=400, detail="Selecione ao menos uma faixa")
+
+    for i, track in enumerate(job["tracks"]):
+        if i not in selected:
+            track["status"] = "deselected"
+
+    chosen = [t for t in job["tracks"] if t["status"] == "pending"]
+    job["total"] = len(chosen)
+    job["status"] = "downloading"
+
+    _cancel_events[job_id] = asyncio.Event()
+    dest_dir = str(Path(OUTPUT_DIR) / (job["playlist_name"] or ""))
+    asyncio.create_task(_run_download_phase(job, dest_dir))
+    await save_job(job)
+    return job
+
+
 @app.get("/api/jobs/{job_id}/events")
 async def job_events(job_id: str):
     async def stream():
@@ -217,7 +251,7 @@ async def job_events(job_id: str):
                 yield f"data: {json.dumps({'error': 'not found'})}\n\n"
                 break
             yield f"data: {json.dumps(job, ensure_ascii=False)}\n\n"
-            if job["status"] in ("completed", "error", "cancelled"):
+            if job["status"] in ("completed", "error", "cancelled", "awaiting_selection"):
                 break
             await asyncio.sleep(0.4)
 
@@ -288,7 +322,6 @@ async def _run_job(job_id: str):
         "truncated": len(all_tracks) > limit,
         "original_total": len(all_tracks),
         "playlist_name": playlist_name,
-        "status": "downloading",
         "tracks": [
             {
                 "artist": t["artist"],
@@ -303,6 +336,14 @@ async def _run_job(job_id: str):
             for t in tracks
         ],
     })
+
+    # opt-in: pausa para o usuário escolher as faixas antes de baixar
+    if job.get("select_tracks"):
+        job["status"] = "awaiting_selection"
+        await save_job(job)
+        return
+
+    job["status"] = "downloading"
     await save_job(job)
     await _run_download_phase(job, dest_dir)
 

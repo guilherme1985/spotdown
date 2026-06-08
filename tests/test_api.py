@@ -184,6 +184,83 @@ def test_download_zip_job_not_found():
     assert r.status_code == 404
 
 
+async def test_run_job_pauses_for_selection(monkeypatch, tmp_path):
+    """Com select_tracks, _run_job deve parar em awaiting_selection sem baixar."""
+    from downloader import DownloadResult
+    calls = {"n": 0}
+
+    def fake_get(url, query_type):
+        return ("Lista", [{"artist": "a", "title": str(i)} for i in range(4)])
+
+    def fake_download(*a, **k):
+        calls["n"] += 1
+        return DownloadResult("done")
+
+    monkeypatch.setattr(api, "get_playlist_tracks", fake_get)
+    monkeypatch.setattr(api, "download_track", fake_download)
+    monkeypatch.setattr(api, "save_job", _noop_save)
+    monkeypatch.setattr(api, "OUTPUT_DIR", str(tmp_path))
+
+    job = {
+        "id": "sel", "url": "x", "query_type": "url",
+        "max_tracks": 50, "select_tracks": True,
+        "done": 0, "skipped": 0, "failed_count": 0,
+        "filename_template": "{artist} - {name}", "tracks": [], "status": "pending",
+    }
+    api._jobs["sel"] = job
+    api._cancel_events["sel"] = asyncio.Event()
+
+    await api._run_job("sel")
+
+    assert job["status"] == "awaiting_selection"
+    assert len(job["tracks"]) == 4
+    assert calls["n"] == 0  # nada foi baixado ainda
+
+
+async def test_start_job_downloads_only_selected(monkeypatch, tmp_path):
+    from downloader import DownloadResult
+    downloaded = []
+
+    def fake_download(artist, title, dest, **k):
+        downloaded.append(title)
+        return DownloadResult("done")
+
+    monkeypatch.setattr(api, "download_track", fake_download)
+    monkeypatch.setattr(api, "save_job", _noop_save)
+    monkeypatch.setattr(api, "OUTPUT_DIR", str(tmp_path))
+
+    job = {
+        "id": "sel2", "playlist_name": "Lista", "status": "awaiting_selection",
+        "done": 0, "skipped": 0, "failed_count": 0,
+        "filename_template": "{artist} - {name}",
+        "tracks": [
+            {"artist": "a", "title": "t0", "status": "pending", "error": None},
+            {"artist": "a", "title": "t1", "status": "pending", "error": None},
+            {"artist": "a", "title": "t2", "status": "pending", "error": None},
+        ],
+    }
+    api._jobs["sel2"] = job
+    api._cancel_events["sel2"] = asyncio.Event()
+
+    # seleciona apenas índices 0 e 2
+    from api import StartRequest
+    await api.start_job("sel2", StartRequest(selected=[0, 2]))
+    # aguarda a task de download terminar
+    await asyncio.sleep(0.05)
+
+    assert job["total"] == 2
+    assert sorted(downloaded) == ["t0", "t2"]
+    assert job["tracks"][1]["status"] == "deselected"
+
+
+def test_start_job_requires_awaiting_status():
+    api._jobs["s3"] = {"id": "s3", "status": "completed", "tracks": []}
+    api._cancel_events["s3"] = asyncio.Event()
+    client = TestClient(api.app)
+    r = client.post("/api/jobs/s3/start", json={"selected": [0]})
+    assert r.status_code == 400
+
+
 async def test_run_job_handles_fetch_error(monkeypatch):
     def fake_get(url, query_type):
         raise ValueError("playlist não encontrada")

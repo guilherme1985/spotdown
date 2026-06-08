@@ -33,6 +33,14 @@ function saveLimit(v) {
     localStorage.setItem('max_tracks', String(v));
 }
 
+function loadSelectTracks() {
+    return localStorage.getItem('select_tracks') === '1';
+}
+
+function saveSelectTracks(v) {
+    localStorage.setItem('select_tracks', v ? '1' : '0');
+}
+
 function applyTemplate(template, ex) {
     return template
         .replace('{artist}', ex.artist)
@@ -55,9 +63,14 @@ window.toggleSettings = function () {
         templateInput.value = loadTemplate();
         updatePreview();
         document.getElementById('limit-input').value = loadLimit();
+        document.getElementById('select-tracks-input').checked = loadSelectTracks();
         templateInput.focus();
     }
 };
+
+document.getElementById('select-tracks-input')?.addEventListener('change', (e) => {
+    saveSelectTracks(e.target.checked);
+});
 
 document.getElementById('limit-input')?.addEventListener('change', (e) => {
     const val = Math.max(1, Math.min(500, parseInt(e.target.value, 10) || 50));
@@ -146,6 +159,7 @@ async function _createGenerateJob(query, queryType) {
                 filename_template: loadTemplate(),
                 query_type: queryType,
                 max_tracks: loadLimit(),
+                select_tracks: loadSelectTracks(),
             }),
         });
         if (!res.ok) throw new Error(await _errorDetail(res));
@@ -218,7 +232,7 @@ window.selectPlaylist = async function (url) {
         const jobs = await fetch('/api/jobs').then(r => r.json());
         for (const job of [...jobs].reverse()) {
             jobsEl.appendChild(buildCard(job));
-            if (!['completed', 'error', 'cancelled'].includes(job.status)) {
+            if (!['completed', 'error', 'cancelled', 'awaiting_selection'].includes(job.status)) {
                 startSSE(job.id);
             }
         }
@@ -342,7 +356,7 @@ async function createJobFromUrl(url) {
         const res = await fetch('/api/jobs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, filename_template: loadTemplate(), max_tracks: loadLimit() }),
+            body: JSON.stringify({ url, filename_template: loadTemplate(), max_tracks: loadLimit(), select_tracks: loadSelectTracks() }),
         });
         if (!res.ok) throw new Error(await _errorDetail(res));
 
@@ -368,7 +382,7 @@ function startSSE(jobId) {
     es.onmessage = (e) => {
         const job = JSON.parse(e.data);
         refreshCard(job);
-        if (['completed', 'error', 'cancelled'].includes(job.status)) {
+        if (['completed', 'error', 'cancelled', 'awaiting_selection'].includes(job.status)) {
             es.close();
             delete activeSSE[jobId];
         }
@@ -406,6 +420,7 @@ function cardHTML(job) {
     const labels = {
         pending: 'Aguardando', fetching: 'Buscando...', downloading: 'Baixando',
         completed: 'Concluído', error: 'Erro', cancelled: 'Cancelado',
+        awaiting_selection: 'Escolha as faixas',
     };
     const title = job.playlist_name || (job.url.length > 65 ? job.url.slice(0, 62) + '…' : job.url);
     const pct   = job.total > 0 ? Math.round((job.done / job.total) * 100) : 0;
@@ -424,6 +439,9 @@ function bodyHTML(job, pct) {
     }
     if (['pending', 'fetching'].includes(job.status)) {
         return `<div class="fetching-row"><div class="spinner"></div> Buscando faixas no Spotify…</div>${actionsHTML(job)}`;
+    }
+    if (job.status === 'awaiting_selection') {
+        return selectionHTML(job);
     }
     if (job.total === 0) return '';
 
@@ -486,6 +504,23 @@ function actionsHTML(job) {
     return btns.length > 0 ? `<div class="card-actions">${btns.join('')}</div>` : '';
 }
 
+function selectionHTML(job) {
+    const items = job.tracks.map((t, i) => `
+        <label class="select-track">
+            <input type="checkbox" checked data-idx="${i}" onchange="updateSelectCount('${job.id}')">
+            <span>${esc(t.artist)} — ${esc(t.title)}</span>
+        </label>
+    `).join('');
+    return `
+        <div class="select-info">Selecione as faixas que deseja baixar:</div>
+        <div class="select-list">${items}</div>
+        <div class="card-actions">
+            <button class="btn-accent" id="start-btn-${job.id}" onclick="startWithSelection('${job.id}', this)">Baixar selecionadas (${job.tracks.length})</button>
+            <button class="btn-danger" onclick="deleteJob('${job.id}', this)">Cancelar</button>
+        </div>
+    `;
+}
+
 function trackListHTML(jobId, tracks) {
     const icons = {
         pending:     `<span style="color:var(--text-dim)">○</span>`,
@@ -494,7 +529,10 @@ function trackListHTML(jobId, tracks) {
         skipped:     `<span style="color:var(--warning)">–</span>`,
         failed:      `<span style="color:var(--error)">✗</span>`,
         cancelled:   `<span style="color:var(--text-dim)">⊘</span>`,
+        deselected:  `<span style="color:var(--text-dim)">·</span>`,
     };
+    // faixas não-selecionadas não aparecem na lista de progresso
+    tracks = tracks.filter(t => t.status !== 'deselected');
     const items = tracks.map(t => {
         const errorHtml = (t.status === 'failed' && t.error)
             ? `<div class="track-error">${esc(t.error)}</div>`
@@ -547,6 +585,36 @@ window.retryJob = async function (jobId, btn) {
 window.downloadZip = function (jobId) {
     // Content-Disposition: attachment faz o browser baixar sem navegar
     window.location.href = `/api/jobs/${jobId}/zip`;
+};
+
+window.updateSelectCount = function (jobId) {
+    const card = document.getElementById(`job-${jobId}`);
+    const checked = card.querySelectorAll('.select-track input:checked').length;
+    const btn = document.getElementById(`start-btn-${jobId}`);
+    if (btn) btn.textContent = `Baixar selecionadas (${checked})`;
+};
+
+window.startWithSelection = async function (jobId, btn) {
+    const card = document.getElementById(`job-${jobId}`);
+    const checks = card.querySelectorAll('.select-track input[type=checkbox]');
+    const selected = [...checks].filter(c => c.checked).map(c => parseInt(c.dataset.idx, 10));
+    if (!selected.length) { alert('Selecione ao menos uma faixa.'); return; }
+    btn.disabled = true;
+    btn.textContent = 'Iniciando…';
+    try {
+        const res = await fetch(`/api/jobs/${jobId}/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selected }),
+        });
+        if (!res.ok) throw new Error(await _errorDetail(res));
+        refreshCard(await res.json());
+        startSSE(jobId);
+    } catch (err) {
+        alert(`Erro: ${err.message}`);
+        btn.disabled = false;
+        updateSelectCount(jobId);
+    }
 };
 
 window.downloadAgain = function (jobId) {
