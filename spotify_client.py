@@ -42,16 +42,17 @@ def get_playlist_tracks(url: str) -> tuple[str, list[dict]]:
     name = _safe_folder_name(info.get("name") or playlist_id)
 
     try:
-        results = sp.playlist_tracks(
-            playlist_id,
-            fields="items(track(name,artists(name),album(name,images),track_number)),next",
-            additional_types=("track",),
-        )
+        # Sem fields: evita 403 que a API retorna quando fields+additional_types são combinados
+        results = sp.playlist_tracks(playlist_id, additional_types=("track",))
     except SpotifyException as e:
         if e.http_status == 404:
             raise ValueError(
                 "Não foi possível ler as faixas da playlist. "
                 "Confirme que a playlist é pública e não é personalizada pelo Spotify."
+            ) from e
+        if e.http_status == 403:
+            raise ValueError(
+                "Acesso negado à playlist. Confirme que ela é pública."
             ) from e
         raise
 
