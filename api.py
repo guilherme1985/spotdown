@@ -145,14 +145,22 @@ async def clear_history():
 
 
 @app.delete("/api/jobs/{job_id}")
-async def cancel_job(job_id: str):
+async def delete_or_cancel_job(job_id: str):
     job = _jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job não encontrado")
-    if job["status"] not in ("fetching", "downloading"):
-        raise HTTPException(status_code=400, detail="Job não está em andamento")
-    _cancel_events[job_id].set()
-    return {"ok": True}
+
+    if job["status"] in ("fetching", "downloading"):
+        _cancel_events[job_id].set()
+        return {"action": "cancelled"}
+
+    # Job finalizado — remove da memória e do banco
+    del _jobs[job_id]
+    del _cancel_events[job_id]
+    async with __import__("aiosqlite").connect(__import__("db").DB_PATH) as db:
+        await db.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+        await db.commit()
+    return {"action": "deleted"}
 
 
 @app.post("/api/jobs/{job_id}/retry")

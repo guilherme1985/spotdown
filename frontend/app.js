@@ -407,6 +407,7 @@ function actionsHTML(job) {
     }
     if (['completed', 'cancelled', 'error'].includes(job.status)) {
         btns.push(`<button class="btn-secondary" onclick="downloadAgain('${job.id}')">Baixar novamente</button>`);
+        btns.push(`<button class="btn-danger" onclick="deleteJob('${job.id}', this)">Excluir</button>`);
     }
     return btns.length > 0 ? `<div class="card-actions">${btns.join('')}</div>` : '';
 }
@@ -480,6 +481,19 @@ window.downloadAgain = function (jobId) {
         });
     } else {
         createJobFromUrl(card.dataset.url);
+    }
+};
+
+window.deleteJob = async function (jobId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Excluindo…';
+    try {
+        await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
+        document.getElementById(`job-${jobId}`)?.remove();
+        updateToolbar();
+    } catch {
+        btn.disabled = false;
+        btn.textContent = 'Excluir';
     }
 };
 
