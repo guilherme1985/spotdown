@@ -11,8 +11,10 @@ Baixe playlists públicas do Spotify como MP3 com uma interface web local. As m�
 
 1. Acesse [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard) e faça login com sua conta Spotify.
 2. Clique em **Create app**.
-3. Preencha nome e descrição (qualquer valor serve). Em **Redirect URI**, coloque `http://localhost` — não será usada, mas é obrigatória.
+3. Preencha nome e descrição (qualquer valor serve). Em **Redirect URI**, adicione exatamente: `http://localhost:5001/callback`
 4. Após criar, acesse **Settings** e copie o **Client ID** e o **Client Secret**.
+
+> O Redirect URI precisa ser registrado no Dashboard para o login funcionar. Se usar uma porta diferente, ajuste `SPOTIFY_REDIRECT_URI` no `.env` e no Dashboard.
 
 ## Instalação
 

@@ -1,26 +1,54 @@
-const form      = document.getElementById('form');
-const urlInput  = document.getElementById('url-input');
-const submitBtn = document.getElementById('submit-btn');
-const limitHint = document.getElementById('limit-hint');
-const jobsEl    = document.getElementById('jobs');
+const form          = document.getElementById('form');
+const urlInput      = document.getElementById('url-input');
+const submitBtn     = document.getElementById('submit-btn');
+const limitHint     = document.getElementById('limit-hint');
+const jobsEl        = document.getElementById('jobs');
+const jobsToolbar   = document.getElementById('jobs-toolbar');
+const connectSection = document.getElementById('connect-section');
+const formSection   = document.getElementById('form-section');
+const authIndicator = document.getElementById('auth-indicator');
 
 const activeSSE = {};
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
-    try {
-        const jobs = await fetch('/api/jobs').then(r => r.json());
-        for (const job of [...jobs].reverse()) {
-            jobsEl.appendChild(buildCard(job));
-            if (job.status !== 'completed' && job.status !== 'error' && job.status !== 'cancelled') {
-                startSSE(job.id);
+    const { authenticated } = await fetch('/api/auth/status').then(r => r.json());
+    setAuthState(authenticated);
+
+    if (authenticated) {
+        try {
+            const jobs = await fetch('/api/jobs').then(r => r.json());
+            for (const job of [...jobs].reverse()) {
+                jobsEl.appendChild(buildCard(job));
+                if (!['completed', 'error', 'cancelled'].includes(job.status)) {
+                    startSSE(job.id);
+                }
             }
-        }
-        if (jobs.length > 0 && jobs[0].max_tracks) {
-            limitHint.textContent = `Limite: primeiras ${jobs[0].max_tracks} faixas por playlist`;
-        }
-    } catch { /* server not ready yet */ }
+            if (jobs.length > 0 && jobs[0].max_tracks) {
+                limitHint.textContent = `Limite: primeiras ${jobs[0].max_tracks} faixas por playlist`;
+            }
+            updateToolbar();
+        } catch { /* server not ready yet */ }
+    }
 })();
+
+function setAuthState(authenticated) {
+    if (authenticated) {
+        connectSection.classList.add('hidden');
+        formSection.classList.remove('hidden');
+        authIndicator.textContent = '● Conectado';
+        authIndicator.classList.remove('hidden');
+    } else {
+        connectSection.classList.remove('hidden');
+        formSection.classList.add('hidden');
+        authIndicator.classList.add('hidden');
+    }
+}
+
+function updateToolbar() {
+    const hasJobs = jobsEl.children.length > 0;
+    jobsToolbar.classList.toggle('hidden', !hasJobs);
+}
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 form.addEventListener('submit', async (e) => {
@@ -40,13 +68,19 @@ async function createJobFromUrl(url) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url }),
         });
+        if (res.status === 401) {
+            setAuthState(false);
+            throw new Error('Sessão expirada. Reconecte sua conta Spotify.');
+        }
         if (!res.ok) throw new Error((await res.json()).detail || `Erro ${res.status}`);
+
         const job = await res.json();
         if (job.max_tracks) limitHint.textContent = `Limite: primeiras ${job.max_tracks} faixas por playlist`;
         const card = buildCard(job);
         jobsEl.prepend(card);
         card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         startSSE(job.id);
+        updateToolbar();
     } catch (err) {
         alert(`Erro: ${err.message}`);
     } finally {
@@ -91,8 +125,7 @@ function refreshCard(job) {
     const newList = card.querySelector('.tracks-list');
     if (newList && !wasOpen) newList.classList.add('hidden');
     if (job.status === 'downloading') {
-        card.querySelector('.track-item.is-downloading')
-            ?.scrollIntoView({ block: 'nearest' });
+        card.querySelector('.track-item.is-downloading')?.scrollIntoView({ block: 'nearest' });
     }
 }
 
@@ -114,32 +147,22 @@ function cardHTML(job) {
 
 function bodyHTML(job, pct) {
     if (job.status === 'error') {
-        return `
-            <div class="error-msg">${esc(job.error || 'Erro desconhecido')}</div>
-            ${actionsHTML(job)}
-        `;
+        return `<div class="error-msg">${esc(job.error || 'Erro desconhecido')}</div>${actionsHTML(job)}`;
     }
-    if (job.status === 'pending' || (job.status === 'fetching')) {
-        return `
-            <div class="fetching-row"><div class="spinner"></div> Buscando faixas na API do Spotify…</div>
-            ${actionsHTML(job)}
-        `;
+    if (['pending', 'fetching'].includes(job.status)) {
+        return `<div class="fetching-row"><div class="spinner"></div> Buscando faixas na API do Spotify…</div>${actionsHTML(job)}`;
     }
     if (job.total === 0) return '';
 
     let html = '';
 
     if (job.truncated) {
-        html += `<div class="truncation-notice">
-            ⚠ Playlist tem ${job.original_total} faixas — baixando apenas as primeiras ${job.max_tracks}.
-        </div>`;
+        html += `<div class="truncation-notice">⚠ Playlist tem ${job.original_total} faixas — baixando apenas as primeiras ${job.max_tracks}.</div>`;
     }
 
     html += `
         <div class="progress-row">
-            <div class="progress-track">
-                <div class="progress-fill" style="width:${pct}%"></div>
-            </div>
+            <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
             <span class="progress-label">${job.done} / ${job.total}</span>
         </div>
     `;
@@ -199,14 +222,12 @@ function trackListHTML(jobId, tracks) {
         </div>
     `).join('');
     return `
-        <button class="tracks-toggle" onclick="toggleList('tracks-${jobId}', this)">
-            ▾ Faixas (${tracks.length})
-        </button>
+        <button class="tracks-toggle" onclick="toggleList('tracks-${jobId}', this)">▾ Faixas (${tracks.length})</button>
         <div class="tracks-list" id="tracks-${jobId}">${items}</div>
     `;
 }
 
-// ── Global action handlers ────────────────────────────────────────────────────
+// ── Actions ───────────────────────────────────────────────────────────────────
 window.toggleList = function (listId, btn) {
     const el = document.getElementById(listId);
     if (!el) return;
@@ -217,12 +238,8 @@ window.toggleList = function (listId, btn) {
 window.cancelJob = async function (jobId, btn) {
     btn.disabled = true;
     btn.textContent = 'Cancelando…';
-    try {
-        await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' });
-    } catch {
-        btn.disabled = false;
-        btn.textContent = 'Cancelar';
-    }
+    try { await fetch(`/api/jobs/${jobId}`, { method: 'DELETE' }); }
+    catch { btn.disabled = false; btn.textContent = 'Cancelar'; }
 };
 
 window.retryJob = async function (jobId, btn) {
@@ -231,8 +248,7 @@ window.retryJob = async function (jobId, btn) {
     try {
         const res = await fetch(`/api/jobs/${jobId}/retry`, { method: 'POST' });
         if (!res.ok) throw new Error((await res.json()).detail);
-        const job = await res.json();
-        refreshCard(job);
+        refreshCard(await res.json());
         startSSE(jobId);
     } catch (err) {
         alert(`Erro: ${err.message}`);
@@ -243,15 +259,25 @@ window.retryJob = async function (jobId, btn) {
 
 window.downloadAgain = function (jobId) {
     const card = document.getElementById(`job-${jobId}`);
-    if (!card) return;
-    createJobFromUrl(card.dataset.url);
+    if (card) createJobFromUrl(card.dataset.url);
 };
 
-// ── Utils ────────────────────────────────────────────────────────────────────
+window.clearHistory = async function () {
+    const res = await fetch('/api/jobs', { method: 'DELETE' });
+    const { removed } = await res.json();
+    if (removed === 0) return;
+
+    // Remove cards dos jobs finalizados do DOM
+    document.querySelectorAll('.job-card').forEach(card => {
+        const jobId = card.id.replace('job-', '');
+        if (!activeSSE[jobId]) card.remove();
+    });
+    updateToolbar();
+};
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
 function esc(str) {
     return (str ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

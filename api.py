@@ -7,13 +7,18 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from db import init_db, load_jobs, save_job
 from downloader import download_track
-from spotify_client import get_playlist_tracks
+from spotify_client import (
+    get_auth_url,
+    get_playlist_tracks,
+    handle_callback,
+    is_authenticated,
+)
 
 OUTPUT_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
 MAX_TRACKS = int(os.getenv("MAX_TRACKS_PER_PLAYLIST", "50"))
@@ -26,7 +31,6 @@ _cancel_events: dict[str, asyncio.Event] = {}
 async def lifespan(app):
     await init_db()
     for job in await load_jobs():
-        # Mark mid-run jobs as cancelled; reset stuck "downloading" tracks
         if job["status"] in ("pending", "fetching", "downloading"):
             job["status"] = "cancelled"
             for track in job.get("tracks", []):
@@ -40,12 +44,37 @@ async def lifespan(app):
 app = FastAPI(title="SpotDownload API", lifespan=lifespan)
 
 
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+@app.get("/auth/login")
+async def auth_login():
+    url = await asyncio.to_thread(get_auth_url)
+    return RedirectResponse(url=url)
+
+
+@app.get("/auth/callback")
+async def auth_callback(code: str):
+    await asyncio.to_thread(handle_callback, code)
+    return RedirectResponse(url="/")
+
+
+@app.get("/api/auth/status")
+async def auth_status():
+    authenticated = await asyncio.to_thread(is_authenticated)
+    return {"authenticated": authenticated}
+
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+
 class JobRequest(BaseModel):
     url: str
 
 
 @app.post("/api/jobs")
 async def create_job(req: JobRequest):
+    if not await asyncio.to_thread(is_authenticated):
+        raise HTTPException(status_code=401, detail="Conecte sua conta Spotify primeiro.")
+
     job_id = str(uuid.uuid4())[:8]
     job = {
         "id": job_id,
@@ -80,6 +109,27 @@ async def get_job(job_id: str):
     if job_id not in _jobs:
         raise HTTPException(status_code=404, detail="Job não encontrado")
     return _jobs[job_id]
+
+
+@app.delete("/api/jobs")
+async def clear_history():
+    """Remove do histórico todos os jobs finalizados (completed/cancelled/error)."""
+    finished = [
+        jid for jid, j in _jobs.items()
+        if j["status"] in ("completed", "cancelled", "error")
+    ]
+    for jid in finished:
+        del _jobs[jid]
+        del _cancel_events[jid]
+
+    async with __import__("aiosqlite").connect(__import__("db").DB_PATH) as db:
+        await db.execute(
+            f"DELETE FROM jobs WHERE id IN ({','.join('?' * len(finished))})",
+            finished,
+        )
+        await db.commit()
+
+    return {"removed": len(finished)}
 
 
 @app.delete("/api/jobs/{job_id}")
@@ -134,13 +184,11 @@ async def job_events(job_id: str):
     return StreamingResponse(
         stream(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-            "Connection": "keep-alive",
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
     )
 
+
+# ── Job runner ────────────────────────────────────────────────────────────────
 
 async def _run_job(job_id: str):
     job = _jobs[job_id]
@@ -224,10 +272,9 @@ async def _run_download_phase(job: dict, dest_dir: str):
         await save_job(job)
 
     await asyncio.gather(*[download_one(t) for t in pending])
-
     job["status"] = "cancelled" if cancel_event.is_set() else "completed"
     await save_job(job)
 
 
-# Must be last — serves frontend at /
+# Must be last
 app.mount("/", StaticFiles(directory="frontend", html=True), name="static")
