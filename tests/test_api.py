@@ -84,6 +84,9 @@ async def test_download_phase_counts_results(monkeypatch, tmp_path):
     assert job["skipped"] == 1
     assert job["failed_count"] == 1
     assert job["status"] == "completed"
+    # campos usados pelo cálculo de ETA no frontend
+    assert "download_started_at" in job
+    assert job["done_at_start"] == 0
 
     by_title = {t["title"]: t["status"] for t in job["tracks"]}
     assert by_title == {"ok": "done", "exists": "skipped", "fail": "failed"}

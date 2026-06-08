@@ -312,6 +312,9 @@ async def _run_download_phase(job: dict, dest_dir: str):
     sem = asyncio.Semaphore(3)
     cancel_event = _cancel_events[job["id"]]
     pending = [t for t in job["tracks"] if t["status"] == "pending"]
+    # marca o início para o frontend calcular velocidade/ETA
+    job["download_started_at"] = datetime.now().isoformat()
+    job["done_at_start"] = job["done"]
 
     async def download_one(track_state: dict):
         if cancel_event.is_set():

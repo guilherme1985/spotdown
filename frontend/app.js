@@ -440,6 +440,11 @@ function bodyHTML(job, pct) {
         </div>
     `;
 
+    if (job.status === 'downloading') {
+        const eta = _etaText(job);
+        if (eta) html += `<div class="eta-row">${eta}</div>`;
+    }
+
     const downloading = job.tracks.filter(t => t.status === 'downloading');
     if (downloading.length > 0) {
         const names = downloading.map(t => `${esc(t.artist)} — ${esc(t.title)}`).join('<br>');
@@ -586,6 +591,29 @@ window.clearHistory = async function () {
     });
     updateToolbar();
 };
+
+// ── Velocidade / ETA ──────────────────────────────────────────────────────────
+function _etaText(job) {
+    if (!job.download_started_at) return '';
+    const elapsed = (Date.now() - new Date(job.download_started_at).getTime()) / 1000;
+    const processed = job.done - (job.done_at_start || 0);
+    if (elapsed < 1 || processed < 1) return '';
+
+    const rate = processed / elapsed;              // faixas por segundo
+    const perMin = rate * 60;
+    const remaining = job.total - job.done;
+    if (remaining <= 0) return '';
+
+    const etaSec = Math.round(remaining / rate);
+    return `~${_fmtDuration(etaSec)} restantes · ${perMin.toFixed(1)} faixas/min`;
+}
+
+function _fmtDuration(sec) {
+    if (sec < 60) return `${sec}s`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return s ? `${m}min ${s}s` : `${m}min`;
+}
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 async function _errorDetail(res) {
