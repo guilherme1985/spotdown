@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from db import init_db, load_jobs, save_job
 from downloader import download_track, DEFAULT_TEMPLATE
-from spotify_client import get_playlist_tracks, _get_client, connect_with_credentials
+from spotify_client import get_playlist_tracks, _get_client, connect_with_credentials, search_playlists
 
 OUTPUT_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
 MAX_TRACKS = int(os.getenv("MAX_TRACKS_PER_PLAYLIST", "50"))
@@ -50,6 +50,15 @@ async def spotify_status():
         return {"connected": True}
     except Exception as e:
         return {"connected": False, "error": str(e)}
+
+
+@app.get("/api/spotify/search-playlists")
+async def search_playlists_endpoint(q: str, limit: int = 5):
+    try:
+        results = await asyncio.to_thread(search_playlists, q, min(limit, 8))
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/spotify/disconnect")

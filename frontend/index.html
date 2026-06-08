@@ -82,7 +82,7 @@
                 <button class="seg-btn" data-type="album"  onclick="selectQueryType(this)">Álbum</button>
                 <button class="seg-btn" data-type="mood"   onclick="selectQueryType(this)">Mood / Gênero</button>
             </div>
-            <div class="settings-input-row" style="margin-top:12px;">
+            <div class="settings-input-row" id="generate-input-row" style="margin-top:12px;">
                 <input
                     id="generate-input"
                     class="url-input"
@@ -93,6 +93,15 @@
                     onkeydown="if(event.key==='Enter'){submitGenerate();}"
                 />
                 <button type="button" class="btn-primary" id="generate-btn" onclick="submitGenerate()">Buscar e Baixar</button>
+            </div>
+            <p id="generate-hint" class="generate-hint hidden"></p>
+
+            <div id="playlist-picker" class="hidden">
+                <div class="picker-header">
+                    <span>Escolha uma playlist:</span>
+                    <button type="button" class="btn-picker-back" onclick="hidePicker()">← Voltar</button>
+                </div>
+                <div id="playlist-results" class="playlist-results"></div>
             </div>
         </section>
 
@@ -132,7 +141,7 @@
         </div>
     </div>
 
-    <footer class="footer">SpotDownload v3.1</footer>
+    <footer class="footer">SpotDownload v3.2</footer>
 
     <script src="app.js"></script>
 </body>

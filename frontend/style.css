@@ -559,6 +559,94 @@ body {
 .seg-btn.active     { background: rgba(29,185,84,0.15); color: var(--accent); font-weight: 700; }
 .seg-btn:hover:not(.active) { background: rgba(255,255,255,0.04); color: var(--text-muted); }
 
+/* ── Generate hint ── */
+.generate-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 8px;
+}
+
+/* ── Playlist picker ── */
+.picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  margin-top: 12px;
+}
+
+.btn-picker-back {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+.btn-picker-back:hover { text-decoration: underline; }
+
+.playlist-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.playlist-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.playlist-card:hover {
+  background: rgba(29,185,84,0.08);
+  border-color: rgba(29,185,84,0.3);
+}
+
+.playlist-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.playlist-thumb-placeholder {
+  width: 44px;
+  height: 44px;
+  background: var(--surface);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.playlist-card-info { flex: 1; min-width: 0; }
+
+.playlist-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-card-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
 /* ── Modal ── */
 .modal-overlay {
   position: fixed;

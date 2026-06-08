@@ -104,16 +104,36 @@ window.toggleGenerate = function () {
     if (open) document.getElementById('generate-input').focus();
 };
 
+const GENERATE_HINTS = {
+    artist: 'Músicas mais populares do artista',
+    album:  '',
+    mood:   'Escolha entre as playlists encontradas',
+};
+
 window.selectQueryType = function (btn) {
     document.querySelectorAll('#query-type-control .seg-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     _selectedQueryType = btn.dataset.type;
     document.getElementById('generate-input').placeholder = GENERATE_PLACEHOLDERS[_selectedQueryType];
+    const hint = document.getElementById('generate-hint');
+    const msg  = GENERATE_HINTS[_selectedQueryType] || '';
+    hint.textContent = msg;
+    hint.classList.toggle('hidden', !msg);
+    hidePicker();
 };
 
 window.submitGenerate = async function () {
     const query = document.getElementById('generate-input').value.trim();
     if (!query) return;
+
+    if (_selectedQueryType === 'mood') {
+        await _searchAndShowPlaylists(query);
+    } else {
+        await _createGenerateJob(query, _selectedQueryType);
+    }
+};
+
+async function _createGenerateJob(query, queryType) {
     const btn = document.getElementById('generate-btn');
     btn.disabled = true;
     btn.textContent = 'Aguarde...';
@@ -124,7 +144,7 @@ window.submitGenerate = async function () {
             body: JSON.stringify({
                 url: query,
                 filename_template: loadTemplate(),
-                query_type: _selectedQueryType,
+                query_type: queryType,
                 max_tracks: loadLimit(),
             }),
         });
@@ -142,6 +162,53 @@ window.submitGenerate = async function () {
         btn.disabled = false;
         btn.textContent = 'Buscar e Baixar';
     }
+}
+
+async function _searchAndShowPlaylists(query) {
+    const btn = document.getElementById('generate-btn');
+    btn.disabled = true;
+    btn.textContent = 'Buscando...';
+    try {
+        const res = await fetch(`/api/spotify/search-playlists?q=${encodeURIComponent(query)}&limit=5`);
+        if (!res.ok) throw new Error((await res.json()).detail);
+        const playlists = await res.json();
+        if (!playlists.length) throw new Error('Nenhuma playlist encontrada.');
+        _showPicker(playlists);
+    } catch (err) {
+        alert(`Erro: ${err.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Buscar e Baixar';
+    }
+}
+
+function _showPicker(playlists) {
+    const resultsEl = document.getElementById('playlist-results');
+    resultsEl.innerHTML = playlists.map(p => `
+        <div class="playlist-card" onclick="selectPlaylist('${esc(p.url)}')">
+            ${p.image
+                ? `<img class="playlist-thumb" src="${esc(p.image)}" alt="" loading="lazy">`
+                : `<div class="playlist-thumb-placeholder">♪</div>`}
+            <div class="playlist-card-info">
+                <div class="playlist-card-name">${esc(p.name)}</div>
+                <div class="playlist-card-meta">${esc(p.owner)} · ${p.tracks_total} faixas</div>
+            </div>
+        </div>
+    `).join('');
+    document.getElementById('playlist-picker').classList.remove('hidden');
+    document.getElementById('generate-input-row').classList.add('hidden');
+}
+
+window.hidePicker = function () {
+    document.getElementById('playlist-picker').classList.add('hidden');
+    document.getElementById('generate-input-row').classList.remove('hidden');
+};
+
+window.selectPlaylist = async function (url) {
+    hidePicker();
+    document.getElementById('generate-panel').classList.add('hidden');
+    document.getElementById('generate-toggle-btn').classList.remove('active');
+    await createJobFromUrl(url);
 };
 
 // ── Init ─────────────────────────────────────────────────────────────────────
