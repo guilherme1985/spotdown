@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpotDownload</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%231DB954'/%3E%3Cpath d='M12 4v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V8h4V4h-6z' fill='%23000'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-inner">
+            <div class="logo">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                </svg>
+                SpotDownload
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <section class="hero">
+            <h1>Baixe sua playlist do Spotify</h1>
+            <p>Cole o link da playlist e acompanhe o download em tempo real</p>
+        </section>
+
+        <section class="form-section">
+            <form id="form" class="form">
+                <input
+                    id="url-input"
+                    class="url-input"
+                    type="text"
+                    placeholder="https://open.spotify.com/playlist/..."
+                    autocomplete="off"
+                    spellcheck="false"
+                />
+                <button type="submit" id="submit-btn" class="btn-primary">
+                    Baixar
+                </button>
+            </form>
+            <p class="form-hint" id="limit-hint"></p>
+        </section>
+
+        <section id="jobs" class="jobs-section"></section>
+    </main>
+
+    <footer class="footer">
+        SpotDownload v1.4
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
