@@ -1,6 +1,5 @@
 .env
 downloads/
-Downloads/
 __pycache__/
 *.pyc
 *.pyo

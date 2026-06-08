@@ -4,10 +4,10 @@ services:
     ports:
       - "5001:8000"
     volumes:
-      - ./Downloads:/app/downloads
+      - ./downloads:/app/downloads
     env_file:
       - .env
     environment:
       MAX_TRACKS_PER_PLAYLIST: "50"
-      DOWNLOAD_DIR: Downloads
+      DOWNLOAD_DIR: downloads
     restart: unless-stopped
