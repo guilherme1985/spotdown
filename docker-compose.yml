@@ -13,5 +13,6 @@ services:
     environment:
       MAX_TRACKS_PER_PLAYLIST: "50"
       DOWNLOAD_DIR: downloads
+      DOWNLOAD_RETRIES: "2"   # tentativas extras em erros transitórios por faixa
       HOME: /tmp
     restart: unless-stopped

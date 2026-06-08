@@ -102,8 +102,6 @@ def test_download_track_skips_existing(tmp_path):
 
 def test_download_track_failed_when_no_file(monkeypatch, tmp_path):
     """Se o yt-dlp termina sem erro mas não cria o arquivo, é falha diagnosticada."""
-    from downloader import DownloadResult
-
     class FakeYDL:
         def __init__(self, opts): pass
         def __enter__(self): return self
@@ -114,3 +112,58 @@ def test_download_track_failed_when_no_file(monkeypatch, tmp_path):
     result = downloader.download_track("A", "Inexistente", str(tmp_path))
     assert result.status == "failed"
     assert result.error == "Nenhum resultado encontrado no YouTube"
+
+
+# ── Retry automático ──────────────────────────────────────────────────────────
+
+def _fake_ydl_class(counter, behavior):
+    """Cria uma classe FakeYDL cujo download() executa `behavior(n)` na n-ésima chamada."""
+    class FakeYDL:
+        def __init__(self, opts): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def download(self, queries):
+            counter["n"] += 1
+            behavior(counter["n"])
+    return FakeYDL
+
+
+def test_retry_exhausts_on_transient_error(monkeypatch, tmp_path):
+    counter = {"n": 0}
+    def always_timeout(n):
+        raise Exception("Connection timed out")
+    monkeypatch.setattr(downloader.yt_dlp, "YoutubeDL", _fake_ydl_class(counter, always_timeout))
+    monkeypatch.setattr(downloader.time, "sleep", lambda s: None)
+
+    result = downloader.download_track("A", "B", str(tmp_path), retries=2)
+    assert result.status == "failed"
+    assert result.error == "Falha de conexão"
+    assert counter["n"] == 3  # 1 tentativa inicial + 2 retries
+
+
+def test_no_retry_on_permanent_error(monkeypatch, tmp_path):
+    counter = {"n": 0}
+    def unavailable(n):
+        raise Exception("Video unavailable")
+    monkeypatch.setattr(downloader.yt_dlp, "YoutubeDL", _fake_ydl_class(counter, unavailable))
+    monkeypatch.setattr(downloader.time, "sleep", lambda s: None)
+
+    result = downloader.download_track("A", "B", str(tmp_path), retries=2)
+    assert result.status == "failed"
+    assert result.error == "Vídeo indisponível no YouTube"
+    assert counter["n"] == 1  # erro permanente: não repete
+
+
+def test_retry_then_success(monkeypatch, tmp_path):
+    counter = {"n": 0}
+    mp3 = tmp_path / "A - B.mp3"
+    def fail_then_ok(n):
+        if n == 1:
+            raise Exception("Connection reset by peer")
+        mp3.write_text("audio")  # 2ª tentativa cria o arquivo
+    monkeypatch.setattr(downloader.yt_dlp, "YoutubeDL", _fake_ydl_class(counter, fail_then_ok))
+    monkeypatch.setattr(downloader.time, "sleep", lambda s: None)
+
+    result = downloader.download_track("A", "B", str(tmp_path), retries=2)
+    assert result.status == "done"
+    assert counter["n"] == 2

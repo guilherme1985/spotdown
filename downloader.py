@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import urllib.request
 from typing import NamedTuple
 
@@ -8,6 +9,17 @@ from mutagen.id3 import APIC, ID3, TALB, TIT2, TPE1, TRCK
 from mutagen.mp3 import MP3
 
 DEFAULT_TEMPLATE = "{artist} - {name}"
+# Nº de tentativas extras após a primeira falha (configurável por env).
+DEFAULT_RETRIES = int(os.getenv("DOWNLOAD_RETRIES", "2"))
+RETRY_DELAY = 1.5  # segundos entre tentativas
+
+# Erros permanentes — não adianta repetir (a faixa não existe/é inacessível).
+_PERMANENT_ERRORS = {
+    "Vídeo indisponível no YouTube",
+    "Vídeo privado",
+    "Vídeo com restrição de idade",
+    "Nenhum resultado encontrado no YouTube",
+}
 
 
 class DownloadResult(NamedTuple):
@@ -25,11 +37,14 @@ def download_track(
     cover_url: str | None = None,
     release_date: str | None = None,
     filename_template: str = DEFAULT_TEMPLATE,
+    retries: int = DEFAULT_RETRIES,
+    retry_delay: float = RETRY_DELAY,
 ) -> DownloadResult:
     """Busca no YouTube e baixa o áudio como MP3.
 
-    Retorna um DownloadResult com status "done", "skipped" (já existia)
-    ou "failed" (com a causa em .error).
+    Tenta novamente automaticamente em erros transitórios (ex: falha de
+    conexão), até `retries` vezes. Erros permanentes não são repetidos.
+    Retorna DownloadResult: "done", "skipped" (já existia) ou "failed".
     """
     base_name = _apply_template(
         filename_template, artist, title, album, track_number, release_date
@@ -56,18 +71,26 @@ def download_track(
         ],
     }
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([f"{artist} - {title} audio"])
-    except Exception as e:
-        return DownloadResult("failed", _humanize_error(e))
+    last_error = "Erro desconhecido"
+    for attempt in range(retries + 1):
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([f"{artist} - {title} audio"])
+        except Exception as e:
+            last_error = _humanize_error(e)
+        else:
+            # yt-dlp pode terminar sem exceção mas sem achar resultado (ytsearch vazio)
+            if not os.path.exists(mp3_path):
+                return DownloadResult("failed", "Nenhum resultado encontrado no YouTube")
+            _write_tags(mp3_path, artist, title, album, track_number, cover_url)
+            return DownloadResult("done")
 
-    # yt-dlp pode terminar sem exceção mas sem achar resultado (ytsearch vazio)
-    if not os.path.exists(mp3_path):
-        return DownloadResult("failed", "Nenhum resultado encontrado no YouTube")
+        # chegou aqui = houve exceção; decide se vale repetir
+        if last_error in _PERMANENT_ERRORS or attempt >= retries:
+            break
+        time.sleep(retry_delay)
 
-    _write_tags(mp3_path, artist, title, album, track_number, cover_url)
-    return DownloadResult("done")
+    return DownloadResult("failed", last_error)
 
 
 def _humanize_error(exc: Exception) -> str:
