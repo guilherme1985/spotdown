@@ -1,0 +1,139 @@
+"""Testes da API: endpoints simples (TestClient) e orquestração de jobs."""
+import asyncio
+
+import pytest
+from fastapi.testclient import TestClient
+
+import api
+
+
+async def _noop_save(job):
+    """Substitui save_job nos testes para não tocar o banco."""
+    return None
+
+
+# ── Endpoints simples ─────────────────────────────────────────────────────────
+
+def test_list_jobs_empty():
+    client = TestClient(api.app)
+    r = client.get("/api/jobs")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_get_job_not_found():
+    client = TestClient(api.app)
+    r = client.get("/api/jobs/inexistente")
+    assert r.status_code == 404
+
+
+def test_create_job_invalid_query_type():
+    client = TestClient(api.app)
+    r = client.post("/api/jobs", json={"url": "x", "query_type": "invalido"})
+    assert r.status_code == 422  # validação do Pydantic
+
+
+# ── Orquestração: _run_download_phase ─────────────────────────────────────────
+
+async def test_download_phase_counts_results(monkeypatch, tmp_path):
+    """Verifica a contagem done/skipped/failed conforme o retorno de download_track."""
+    def fake_download(artist, title, dest, **kw):
+        return {"ok": True, "exists": None, "fail": False}[title]
+
+    monkeypatch.setattr(api, "download_track", fake_download)
+    monkeypatch.setattr(api, "save_job", _noop_save)
+
+    job = {
+        "id": "j1",
+        "done": 0, "skipped": 0, "failed_count": 0,
+        "filename_template": "{artist} - {name}",
+        "tracks": [
+            {"artist": "a", "title": "ok", "status": "pending"},
+            {"artist": "a", "title": "exists", "status": "pending"},
+            {"artist": "a", "title": "fail", "status": "pending"},
+        ],
+    }
+    api._jobs["j1"] = job
+    api._cancel_events["j1"] = asyncio.Event()
+
+    await api._run_download_phase(job, str(tmp_path))
+
+    assert job["done"] == 3
+    assert job["skipped"] == 1
+    assert job["failed_count"] == 1
+    assert job["status"] == "completed"
+
+    by_title = {t["title"]: t["status"] for t in job["tracks"]}
+    assert by_title == {"ok": "done", "exists": "skipped", "fail": "failed"}
+
+
+async def test_download_phase_respects_cancel(monkeypatch, tmp_path):
+    """Se o cancel_event já está setado, todas as faixas viram cancelled."""
+    monkeypatch.setattr(api, "download_track", lambda *a, **k: True)
+    monkeypatch.setattr(api, "save_job", _noop_save)
+
+    job = {
+        "id": "j2",
+        "done": 0, "skipped": 0, "failed_count": 0,
+        "filename_template": "{artist} - {name}",
+        "tracks": [{"artist": "a", "title": "x", "status": "pending"}],
+    }
+    api._jobs["j2"] = job
+    ev = asyncio.Event()
+    ev.set()
+    api._cancel_events["j2"] = ev
+
+    await api._run_download_phase(job, str(tmp_path))
+
+    assert job["status"] == "cancelled"
+    assert job["tracks"][0]["status"] == "cancelled"
+
+
+# ── Orquestração: _run_job (truncação por max_tracks) ─────────────────────────
+
+async def test_run_job_truncates_to_max_tracks(monkeypatch, tmp_path):
+    def fake_get(url, query_type):
+        return ("MinhaLista", [{"artist": "a", "title": str(i)} for i in range(10)])
+
+    monkeypatch.setattr(api, "get_playlist_tracks", fake_get)
+    monkeypatch.setattr(api, "download_track", lambda *a, **k: True)
+    monkeypatch.setattr(api, "save_job", _noop_save)
+    monkeypatch.setattr(api, "OUTPUT_DIR", str(tmp_path))
+
+    job = {
+        "id": "j3", "url": "qualquer", "query_type": "url",
+        "max_tracks": 5,
+        "done": 0, "skipped": 0, "failed_count": 0,
+        "filename_template": "{artist} - {name}",
+        "tracks": [], "status": "pending",
+    }
+    api._jobs["j3"] = job
+    api._cancel_events["j3"] = asyncio.Event()
+
+    await api._run_job("j3")
+
+    assert job["total"] == 5
+    assert job["truncated"] is True
+    assert job["original_total"] == 10
+    assert job["playlist_name"] == "MinhaLista"
+    assert job["status"] == "completed"
+
+
+async def test_run_job_handles_fetch_error(monkeypatch):
+    def fake_get(url, query_type):
+        raise ValueError("playlist não encontrada")
+
+    monkeypatch.setattr(api, "get_playlist_tracks", fake_get)
+    monkeypatch.setattr(api, "save_job", _noop_save)
+
+    job = {
+        "id": "j4", "url": "x", "query_type": "url",
+        "status": "pending", "error": None, "tracks": [],
+    }
+    api._jobs["j4"] = job
+    api._cancel_events["j4"] = asyncio.Event()
+
+    await api._run_job("j4")
+
+    assert job["status"] == "error"
+    assert "não encontrada" in job["error"]

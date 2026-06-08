@@ -1,0 +1,5 @@
+# Dependências apenas para rodar os testes (não vão para a imagem Docker)
+-r requirements.txt
+pytest
+pytest-asyncio
+httpx<0.28  # 0.28 removeu o arg `app=` usado pelo Starlette do FastAPI 0.103
