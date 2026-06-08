@@ -1,14 +1,18 @@
-const form        = document.getElementById('form');
-const urlInput    = document.getElementById('url-input');
-const submitBtn   = document.getElementById('submit-btn');
-const limitHint   = document.getElementById('limit-hint');
-const jobsEl      = document.getElementById('jobs');
-const jobsToolbar = document.getElementById('jobs-toolbar');
+const form          = document.getElementById('form');
+const urlInput      = document.getElementById('url-input');
+const submitBtn     = document.getElementById('submit-btn');
+const limitHint     = document.getElementById('limit-hint');
+const jobsEl        = document.getElementById('jobs');
+const jobsToolbar   = document.getElementById('jobs-toolbar');
+const spotifyStatus = document.getElementById('spotify-status');
+const spotifyBtn    = document.getElementById('spotify-btn');
 
 const activeSSE = {};
+let _spotifyConnected = false;
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
+    await checkSpotifyStatus();
     try {
         const jobs = await fetch('/api/jobs').then(r => r.json());
         for (const job of [...jobs].reverse()) {
@@ -27,6 +31,45 @@ const activeSSE = {};
 function updateToolbar() {
     jobsToolbar.classList.toggle('hidden', jobsEl.children.length === 0);
 }
+
+// ── Spotify status ────────────────────────────────────────────────────────────
+async function checkSpotifyStatus() {
+    try {
+        const { connected } = await fetch('/api/spotify/status').then(r => r.json());
+        setSpotifyState(connected);
+    } catch {
+        setSpotifyState(false);
+    }
+}
+
+function setSpotifyState(connected) {
+    _spotifyConnected = connected;
+    if (connected) {
+        spotifyStatus.textContent = '● Spotify';
+        spotifyStatus.className = 'spotify-status connected';
+        spotifyBtn.textContent = 'Desconectar';
+        spotifyBtn.className = 'btn-spotify-header disconnected';
+    } else {
+        spotifyStatus.textContent = '● Spotify';
+        spotifyStatus.className = 'spotify-status disconnected';
+        spotifyBtn.textContent = 'Conectar';
+        spotifyBtn.className = 'btn-spotify-header connect';
+    }
+}
+
+window.toggleSpotify = async function () {
+    if (_spotifyConnected) {
+        // Desconectar: limpa o cliente em cache no servidor e reverifica
+        await fetch('/api/spotify/disconnect', { method: 'POST' });
+        setSpotifyState(false);
+    } else {
+        // Reconectar: testa novamente
+        spotifyBtn.disabled = true;
+        spotifyBtn.textContent = 'Verificando…';
+        await checkSpotifyStatus();
+        spotifyBtn.disabled = false;
+    }
+};
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 form.addEventListener('submit', async (e) => {

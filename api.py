@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from db import init_db, load_jobs, save_job
 from downloader import download_track
-from spotify_client import get_playlist_tracks
+from spotify_client import get_playlist_tracks, _get_client
 
 OUTPUT_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
 MAX_TRACKS = int(os.getenv("MAX_TRACKS_PER_PLAYLIST", "50"))
@@ -37,6 +37,24 @@ async def lifespan(app):
 
 
 app = FastAPI(title="SpotDownload API", lifespan=lifespan)
+
+
+# ── Spotify status ────────────────────────────────────────────────────────────
+
+@app.get("/api/spotify/status")
+async def spotify_status():
+    try:
+        await asyncio.to_thread(_get_client)
+        return {"connected": True}
+    except Exception as e:
+        return {"connected": False, "error": str(e)}
+
+
+@app.post("/api/spotify/disconnect")
+async def spotify_disconnect():
+    import spotify_client
+    spotify_client._client = None
+    return {"connected": False}
 
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
