@@ -3,6 +3,9 @@ services:
     build: .
     ports:
       - "5001:8000"
+    # Roda como o usuário do host para que os arquivos baixados não fiquem como root.
+    # Ajuste PUID/PGID no .env se seu usuário não for 1000:1000 (veja com `id -u` / `id -g`).
+    user: "${PUID:-1000}:${PGID:-1000}"
     volumes:
       - ./downloads:/app/downloads
     env_file:
@@ -10,4 +13,5 @@ services:
     environment:
       MAX_TRACKS_PER_PLAYLIST: "50"
       DOWNLOAD_DIR: downloads
+      HOME: /tmp
     restart: unless-stopped

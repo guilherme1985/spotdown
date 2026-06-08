@@ -3,6 +3,7 @@ import os
 import spotipy
 from dotenv import load_dotenv
 from spotdl import Spotdl
+from spotipy.cache_handler import MemoryCacheHandler
 from spotipy.oauth2 import SpotifyClientCredentials
 
 load_dotenv()
@@ -34,7 +35,12 @@ def _get_search_client() -> spotipy.Spotify:
             raise EnvironmentError(
                 "Credenciais não configuradas. Informe o Client ID e Client Secret do Spotify."
             )
-        auth = SpotifyClientCredentials(client_id=client_id, client_secret=client_secret)
+        # MemoryCacheHandler evita escrever .cache em /app (que pertence ao root no container)
+        auth = SpotifyClientCredentials(
+            client_id=client_id,
+            client_secret=client_secret,
+            cache_handler=MemoryCacheHandler(),
+        )
         _search_client = spotipy.Spotify(auth_manager=auth)
     return _search_client
 

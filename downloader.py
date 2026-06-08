@@ -36,6 +36,7 @@ def download_track(
         "quiet": True,
         "no_warnings": True,
         "default_search": "ytsearch1",
+        "cachedir": False,  # não escreve cache em ~/.cache (container roda como user não-root)
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",

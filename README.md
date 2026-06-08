@@ -33,6 +33,11 @@ SPOTIFY_CLIENT_ID=cole_seu_client_id_aqui
 SPOTIFY_CLIENT_SECRET=cole_seu_client_secret_aqui
 ```
 
+> **Permissões dos arquivos:** o container roda com o UID/GID definidos em `PUID`/`PGID`
+> (padrão `1000:1000`) para que os MP3s baixados pertençam ao seu usuário, e não ao root.
+> Descubra os seus com `id -u` e `id -g`. Se você já tinha arquivos baixados como root,
+> corrija-os uma vez com `sudo chown -R $(id -u):$(id -g) downloads`.
+
 ## Uso
 
 ### Interface web (recomendado)
