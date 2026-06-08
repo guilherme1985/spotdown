@@ -1,7 +1,9 @@
 import os
+
 import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
 from dotenv import load_dotenv
+from spotipy.exceptions import SpotifyException
+from spotipy.oauth2 import SpotifyClientCredentials
 
 load_dotenv()
 
@@ -25,13 +27,33 @@ def get_playlist_tracks(url: str) -> tuple[str, list[dict]]:
 
     playlist_id = _extract_id(url)
 
-    info = sp.playlist(playlist_id, fields="name")
+    try:
+        # additional_types=() evita parâmetro desnecessário que causa 404 em algumas playlists
+        info = sp.playlist(playlist_id, fields="name", additional_types=())
+    except SpotifyException as e:
+        if e.http_status == 404:
+            raise ValueError(
+                "Playlist não encontrada. Verifique se o link está correto e se a playlist é pública. "
+                "Playlists geradas pelo Spotify (Daily Mix, Discover Weekly, Release Radar) "
+                "não são acessíveis sem login do usuário."
+            ) from e
+        raise
+
     name = _safe_folder_name(info.get("name") or playlist_id)
 
-    results = sp.playlist_tracks(
-        playlist_id,
-        fields="items(track(name,artists(name),album(name,images),track_number)),next",
-    )
+    try:
+        results = sp.playlist_tracks(
+            playlist_id,
+            fields="items(track(name,artists(name),album(name,images),track_number)),next",
+            additional_types=("track",),
+        )
+    except SpotifyException as e:
+        if e.http_status == 404:
+            raise ValueError(
+                "Não foi possível ler as faixas da playlist. "
+                "Confirme que a playlist é pública e não é personalizada pelo Spotify."
+            ) from e
+        raise
 
     tracks = []
     while results:
