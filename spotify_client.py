@@ -30,22 +30,37 @@ def connect_with_credentials(client_id: str, client_secret: str) -> None:
     _client = new_client
 
 
-def get_playlist_tracks(url: str) -> tuple[str, list[dict]]:
+_QUERY_PREFIXES = {
+    "url":    None,
+    "artist": "artist:",
+    "album":  "album:",
+    "mood":   "playlist:",
+}
+
+
+def get_playlist_tracks(url: str, query_type: str = "url") -> tuple[str, list[dict]]:
     """Retorna (nome_da_playlist, lista_de_faixas)."""
     client = _get_client()
 
+    prefix = _QUERY_PREFIXES.get(query_type)
+    query  = f"{prefix}{url}" if prefix else url
+
     try:
-        songs = client.search([url])
+        songs = client.search([query])
     except Exception as e:
-        raise ValueError(f"Erro ao buscar playlist no Spotify: {e}") from e
+        raise ValueError(f"Erro ao buscar no Spotify: {e}") from e
 
     if not songs:
-        raise ValueError(
-            "Nenhuma faixa encontrada. Verifique se o link está correto e a playlist é pública. "
-            "Playlists personalizadas pelo Spotify (Daily Mix, Discover Weekly) não são suportadas."
-        )
+        raise ValueError("Nenhuma faixa encontrada. Verifique o termo buscado.")
 
-    playlist_name = _safe_folder_name(songs[0].list_name or _extract_id(url))
+    if query_type == "artist":
+        folder = songs[0].artist or url
+    elif query_type == "album":
+        folder = songs[0].album_name or url
+    else:
+        folder = songs[0].list_name or _extract_id(url)
+
+    playlist_name = _safe_folder_name(folder)
 
     tracks = [
         {

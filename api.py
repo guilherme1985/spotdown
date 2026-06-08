@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
+from typing import Literal
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -76,6 +78,7 @@ async def spotify_connect(req: ConnectRequest):
 class JobRequest(BaseModel):
     url: str
     filename_template: str = DEFAULT_TEMPLATE
+    query_type: Literal["url", "artist", "album", "mood"] = "url"
 
 
 @app.post("/api/jobs")
@@ -96,6 +99,7 @@ async def create_job(req: JobRequest):
         "original_total": 0,
         "max_tracks": MAX_TRACKS,
         "filename_template": req.filename_template,
+        "query_type": req.query_type,
         "created_at": datetime.now().isoformat(),
     }
     _jobs[job_id] = job
@@ -201,7 +205,9 @@ async def _run_job(job_id: str):
     try:
         job["status"] = "fetching"
         await save_job(job)
-        playlist_name, all_tracks = await asyncio.to_thread(get_playlist_tracks, job["url"])
+        playlist_name, all_tracks = await asyncio.to_thread(
+            get_playlist_tracks, job["url"], job.get("query_type", "url")
+        )
     except Exception as e:
         job["status"] = "error"
         job["error"] = str(e)

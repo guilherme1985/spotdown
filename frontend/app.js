@@ -72,6 +72,63 @@ templateInput?.addEventListener('input', () => {
     updatePreview();
 });
 
+// ── Generate panel ────────────────────────────────────────────────────────────
+let _selectedQueryType = 'artist';
+
+const GENERATE_PLACEHOLDERS = {
+    artist: 'Ex: Coldplay',
+    album:  'Ex: After Hours',
+    mood:   'Ex: rock anos 90',
+};
+
+window.toggleGenerate = function () {
+    const panel = document.getElementById('generate-panel');
+    const btn   = document.getElementById('generate-toggle-btn');
+    const open  = panel.classList.toggle('hidden') === false;
+    btn.classList.toggle('active', open);
+    if (open) document.getElementById('generate-input').focus();
+};
+
+window.selectQueryType = function (btn) {
+    document.querySelectorAll('#query-type-control .seg-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    _selectedQueryType = btn.dataset.type;
+    document.getElementById('generate-input').placeholder = GENERATE_PLACEHOLDERS[_selectedQueryType];
+};
+
+window.submitGenerate = async function () {
+    const query = document.getElementById('generate-input').value.trim();
+    if (!query) return;
+    const btn = document.getElementById('generate-btn');
+    btn.disabled = true;
+    btn.textContent = 'Aguarde...';
+    try {
+        const res = await fetch('/api/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: query,
+                filename_template: loadTemplate(),
+                query_type: _selectedQueryType,
+            }),
+        });
+        if (!res.ok) throw new Error((await res.json()).detail || `Erro ${res.status}`);
+        const job = await res.json();
+        if (job.max_tracks) limitHint.textContent = `Limite: primeiras ${job.max_tracks} faixas por playlist`;
+        const card = buildCard(job);
+        jobsEl.prepend(card);
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        startSSE(job.id);
+        updateToolbar();
+        document.getElementById('generate-input').value = '';
+    } catch (err) {
+        alert(`Erro: ${err.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Buscar e Baixar';
+    }
+};
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
     await checkSpotifyStatus();
@@ -249,6 +306,7 @@ function buildCard(job) {
     card.className = 'job-card';
     card.id = `job-${job.id}`;
     card.dataset.url = job.url;
+    card.dataset.queryType = job.query_type || 'url';
     card.innerHTML = cardHTML(job);
     return card;
 }
@@ -257,6 +315,7 @@ function refreshCard(job) {
     const card = document.getElementById(`job-${job.id}`);
     if (!card) return;
     card.dataset.url = job.url;
+    card.dataset.queryType = job.query_type || 'url';
     const listEl  = card.querySelector('.tracks-list');
     const wasOpen = listEl && !listEl.classList.contains('hidden');
     card.innerHTML = cardHTML(job);
@@ -393,7 +452,23 @@ window.retryJob = async function (jobId, btn) {
 
 window.downloadAgain = function (jobId) {
     const card = document.getElementById(`job-${jobId}`);
-    if (card) createJobFromUrl(card.dataset.url);
+    if (!card) return;
+    const queryType = card.dataset.queryType || 'url';
+    if (queryType !== 'url') {
+        fetch('/api/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: card.dataset.url, filename_template: loadTemplate(), query_type: queryType }),
+        }).then(r => r.json()).then(job => {
+            const newCard = buildCard(job);
+            jobsEl.prepend(newCard);
+            newCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            startSSE(job.id);
+            updateToolbar();
+        });
+    } else {
+        createJobFromUrl(card.dataset.url);
+    }
 };
 
 window.clearHistory = async function () {

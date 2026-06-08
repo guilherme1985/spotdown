@@ -61,6 +61,33 @@
             </div>
         </section>
 
+        <div class="generate-toggle-row">
+            <button type="button" class="btn-generate-toggle" id="generate-toggle-btn" onclick="toggleGenerate()">
+                ✦ Gerar por artista ou mood
+            </button>
+        </div>
+
+        <section id="generate-panel" class="settings-panel hidden">
+            <div class="settings-label">Gerar Playlist</div>
+            <div class="segmented-control" id="query-type-control">
+                <button class="seg-btn active" data-type="artist" onclick="selectQueryType(this)">Artista</button>
+                <button class="seg-btn" data-type="album"  onclick="selectQueryType(this)">Álbum</button>
+                <button class="seg-btn" data-type="mood"   onclick="selectQueryType(this)">Mood / Gênero</button>
+            </div>
+            <div class="settings-input-row" style="margin-top:12px;">
+                <input
+                    id="generate-input"
+                    class="url-input"
+                    type="text"
+                    placeholder="Ex: Coldplay"
+                    autocomplete="off"
+                    spellcheck="false"
+                    onkeydown="if(event.key==='Enter'){submitGenerate();}"
+                />
+                <button type="button" class="btn-primary" id="generate-btn" onclick="submitGenerate()">Buscar e Baixar</button>
+            </div>
+        </section>
+
         <div id="jobs-toolbar" class="jobs-toolbar hidden">
             <button class="btn-clear-history" onclick="clearHistory()">Limpar histórico</button>
         </div>
@@ -97,7 +124,7 @@
         </div>
     </div>
 
-    <footer class="footer">SpotDownload v2.7</footer>
+    <footer class="footer">SpotDownload v2.8</footer>
 
     <script src="app.js"></script>
 </body>
