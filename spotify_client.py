@@ -49,6 +49,7 @@ def get_playlist_tracks(url: str) -> tuple[str, list[dict]]:
             "album": song.album_name,
             "track_number": song.track_number,
             "cover_url": song.cover_url,
+            "release_date": song.date or "",
         }
         for song in songs
     ]

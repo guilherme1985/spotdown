@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from db import init_db, load_jobs, save_job
-from downloader import download_track
+from downloader import download_track, DEFAULT_TEMPLATE
 from spotify_client import get_playlist_tracks, _get_client
 
 OUTPUT_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
@@ -61,6 +61,7 @@ async def spotify_disconnect():
 
 class JobRequest(BaseModel):
     url: str
+    filename_template: str = DEFAULT_TEMPLATE
 
 
 @app.post("/api/jobs")
@@ -80,6 +81,7 @@ async def create_job(req: JobRequest):
         "truncated": False,
         "original_total": 0,
         "max_tracks": MAX_TRACKS,
+        "filename_template": req.filename_template,
         "created_at": datetime.now().isoformat(),
     }
     _jobs[job_id] = job
@@ -209,6 +211,7 @@ async def _run_job(job_id: str):
                 "album": t.get("album"),
                 "track_number": t.get("track_number"),
                 "cover_url": t.get("cover_url"),
+                "release_date": t.get("release_date"),
                 "status": "pending",
             }
             for t in tracks
@@ -245,6 +248,8 @@ async def _run_download_phase(job: dict, dest_dir: str):
                 album=track_state.get("album"),
                 track_number=track_state.get("track_number"),
                 cover_url=track_state.get("cover_url"),
+                release_date=track_state.get("release_date"),
+                filename_template=job.get("filename_template", DEFAULT_TEMPLATE),
             )
 
         if result is True:

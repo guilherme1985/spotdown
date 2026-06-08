@@ -5,6 +5,8 @@ import yt_dlp
 from mutagen.id3 import APIC, ID3, TALB, TIT2, TPE1, TRCK
 from mutagen.mp3 import MP3
 
+DEFAULT_TEMPLATE = "{artist} - {name}"
+
 
 def download_track(
     artist: str,
@@ -14,12 +16,15 @@ def download_track(
     album: str | None = None,
     track_number: int | None = None,
     cover_url: str | None = None,
+    release_date: str | None = None,
+    filename_template: str = DEFAULT_TEMPLATE,
 ) -> bool | None:
     """Busca no YouTube e baixa o áudio como MP3.
     Retorna True (baixado), None (já existia) ou False (erro).
     """
-    query = f"{artist} - {title} audio"
-    base_name = _safe_name(f"{artist} - {title}")
+    base_name = _apply_template(
+        filename_template, artist, title, album, track_number, release_date
+    )
     output_path = os.path.join(output_dir, base_name)
 
     if os.path.exists(f"{output_path}.mp3"):
@@ -42,11 +47,31 @@ def download_track(
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([query])
+            ydl.download([f"{artist} - {title} audio"])
         _write_tags(f"{output_path}.mp3", artist, title, album, track_number, cover_url)
         return True
     except Exception:
         return False
+
+
+def _apply_template(
+    template: str,
+    artist: str,
+    title: str,
+    album: str | None,
+    track_number: int | None,
+    release_date: str | None,
+) -> str:
+    number_str = f"{track_number:02d}" if track_number else ""
+    result = (
+        template
+        .replace("{artist}", artist or "")
+        .replace("{name}", title or "")
+        .replace("{album}", album or "")
+        .replace("{number}", number_str)
+        .replace("{releaseDate}", release_date or "")
+    )
+    return _safe_name(result).strip(" -_") or _safe_name(f"{artist} - {title}")
 
 
 def _write_tags(
@@ -73,11 +98,7 @@ def _write_tags(
                 with urllib.request.urlopen(cover_url, timeout=8) as resp:
                     cover_data = resp.read()
                 audio.tags["APIC:Cover"] = APIC(
-                    encoding=3,
-                    mime="image/jpeg",
-                    type=3,
-                    desc="Cover",
-                    data=cover_data,
+                    encoding=3, mime="image/jpeg", type=3, desc="Cover", data=cover_data,
                 )
             except Exception:
                 pass

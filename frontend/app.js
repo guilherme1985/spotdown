@@ -1,14 +1,76 @@
-const form          = document.getElementById('form');
-const urlInput      = document.getElementById('url-input');
-const submitBtn     = document.getElementById('submit-btn');
-const limitHint     = document.getElementById('limit-hint');
-const jobsEl        = document.getElementById('jobs');
-const jobsToolbar   = document.getElementById('jobs-toolbar');
-const spotifyStatus = document.getElementById('spotify-status');
-const spotifyBtn    = document.getElementById('spotify-btn');
+const form            = document.getElementById('form');
+const urlInput        = document.getElementById('url-input');
+const submitBtn       = document.getElementById('submit-btn');
+const limitHint       = document.getElementById('limit-hint');
+const jobsEl          = document.getElementById('jobs');
+const jobsToolbar     = document.getElementById('jobs-toolbar');
+const spotifyStatus   = document.getElementById('spotify-status');
+const spotifyBtn      = document.getElementById('spotify-btn');
+const settingsPanel   = document.getElementById('settings-panel');
+const templateInput   = document.getElementById('template-input');
+const templatePreview = document.getElementById('template-preview');
+
+const DEFAULT_TEMPLATE = '{artist} - {name}';
+const PREVIEW_EXAMPLE  = { artist: 'The Weeknd', name: 'Blinding Lights', album: 'After Hours', number: '03', releaseDate: '2019' };
 
 const activeSSE = {};
 let _spotifyConnected = false;
+
+// ── Template settings ─────────────────────────────────────────────────────────
+function loadTemplate() {
+    return localStorage.getItem('filename_template') || DEFAULT_TEMPLATE;
+}
+
+function saveTemplate(t) {
+    localStorage.setItem('filename_template', t);
+}
+
+function applyTemplate(template, ex) {
+    return template
+        .replace('{artist}', ex.artist)
+        .replace('{name}', ex.name)
+        .replace('{album}', ex.album)
+        .replace('{number}', ex.number)
+        .replace('{releaseDate}', ex.releaseDate);
+}
+
+function updatePreview() {
+    const val = templateInput.value || DEFAULT_TEMPLATE;
+    const preview = applyTemplate(val, PREVIEW_EXAMPLE);
+    templatePreview.textContent = `Ex: ${preview}.mp3`;
+}
+
+window.toggleSettings = function () {
+    const open = settingsPanel.classList.toggle('hidden') === false;
+    document.getElementById('settings-btn').classList.toggle('active', open);
+    if (open) {
+        templateInput.value = loadTemplate();
+        updatePreview();
+        templateInput.focus();
+    }
+};
+
+window.insertVar = function (v) {
+    const start = templateInput.selectionStart;
+    const end   = templateInput.selectionEnd;
+    const cur   = templateInput.value;
+    templateInput.value = cur.slice(0, start) + v + cur.slice(end);
+    templateInput.selectionStart = templateInput.selectionEnd = start + v.length;
+    templateInput.focus();
+    saveTemplate(templateInput.value);
+    updatePreview();
+};
+
+window.resetTemplate = function () {
+    templateInput.value = DEFAULT_TEMPLATE;
+    saveTemplate(DEFAULT_TEMPLATE);
+    updatePreview();
+};
+
+templateInput?.addEventListener('input', () => {
+    saveTemplate(templateInput.value);
+    updatePreview();
+});
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
@@ -87,7 +149,7 @@ async function createJobFromUrl(url) {
         const res = await fetch('/api/jobs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url }),
+            body: JSON.stringify({ url, filename_template: loadTemplate() }),
         });
         if (!res.ok) throw new Error((await res.json()).detail || `Erro ${res.status}`);
 

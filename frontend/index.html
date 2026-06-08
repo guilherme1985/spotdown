@@ -40,8 +40,25 @@
                     spellcheck="false"
                 />
                 <button type="submit" id="submit-btn" class="btn-primary">Baixar</button>
+                <button type="button" class="btn-settings" id="settings-btn" onclick="toggleSettings()" title="Configurações de nome">⚙</button>
             </form>
             <p class="form-hint" id="limit-hint"></p>
+
+            <div id="settings-panel" class="settings-panel hidden">
+                <div class="settings-label">Formato do nome do arquivo</div>
+                <div class="settings-variables">
+                    <span class="var-chip" onclick="insertVar('{artist}')">+ {artist}</span>
+                    <span class="var-chip" onclick="insertVar('{name}')">+ {name}</span>
+                    <span class="var-chip" onclick="insertVar('{album}')">+ {album}</span>
+                    <span class="var-chip" onclick="insertVar('{number}')">+ {number}</span>
+                    <span class="var-chip" onclick="insertVar('{releaseDate}')">+ {releaseDate}</span>
+                </div>
+                <div class="settings-input-row">
+                    <input id="template-input" class="template-input" type="text" spellcheck="false" />
+                    <button type="button" class="btn-reset-template" onclick="resetTemplate()">Padrão</button>
+                </div>
+                <div class="settings-preview" id="template-preview"></div>
+            </div>
         </section>
 
         <div id="jobs-toolbar" class="jobs-toolbar hidden">
@@ -51,7 +68,7 @@
         <section id="jobs" class="jobs-section"></section>
     </main>
 
-    <footer class="footer">SpotDownload v2.5</footer>
+    <footer class="footer">SpotDownload v2.6</footer>
 
     <script src="app.js"></script>
 </body>
