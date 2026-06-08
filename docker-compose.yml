@@ -10,5 +10,5 @@ services:
     environment:
       MAX_TRACKS_PER_PLAYLIST: "50"
       DOWNLOAD_DIR: downloads
-      SPOTIFY_REDIRECT_URI: "http://localhost:5001/callback"
+      SPOTIFY_REDIRECT_URI: "http://127.0.0.1:5001/callback"
     restart: unless-stopped
