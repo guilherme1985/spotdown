@@ -9,4 +9,6 @@ PGID=${PGID:-1000}
 mkdir -p /app/downloads
 chown -R "$PUID:$PGID" /app/downloads 2>/dev/null || true
 
-exec gosu "$PUID:$PGID" "$@"
+# gosu reseta HOME para "/" (o UID alvo não existe em /etc/passwd), o que faz o
+# spotdl tentar criar /.config no import e falhar. Forçamos um HOME gravável.
+exec gosu "$PUID:$PGID" env HOME=/tmp "$@"
