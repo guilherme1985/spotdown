@@ -79,6 +79,7 @@ class JobRequest(BaseModel):
     url: str
     filename_template: str = DEFAULT_TEMPLATE
     query_type: Literal["url", "artist", "album", "mood"] = "url"
+    max_tracks: int | None = None  # None = usa o valor do env MAX_TRACKS_PER_PLAYLIST
 
 
 @app.post("/api/jobs")
@@ -100,6 +101,7 @@ async def create_job(req: JobRequest):
         "max_tracks": MAX_TRACKS,
         "filename_template": req.filename_template,
         "query_type": req.query_type,
+        "max_tracks": max(1, min(req.max_tracks, 500)) if req.max_tracks else MAX_TRACKS,
         "created_at": datetime.now().isoformat(),
     }
     _jobs[job_id] = job
@@ -217,10 +219,11 @@ async def _run_job(job_id: str):
     dest_dir = str(Path(OUTPUT_DIR) / playlist_name)
     Path(dest_dir).mkdir(parents=True, exist_ok=True)
 
-    tracks = all_tracks[:MAX_TRACKS]
+    limit = job.get("max_tracks") or MAX_TRACKS
+    tracks = all_tracks[:limit]
     job.update({
         "total": len(tracks),
-        "truncated": len(all_tracks) > MAX_TRACKS,
+        "truncated": len(all_tracks) > limit,
         "original_total": len(all_tracks),
         "playlist_name": playlist_name,
         "status": "downloading",

@@ -25,6 +25,14 @@ function saveTemplate(t) {
     localStorage.setItem('filename_template', t);
 }
 
+function loadLimit() {
+    return parseInt(localStorage.getItem('max_tracks') || '50', 10);
+}
+
+function saveLimit(v) {
+    localStorage.setItem('max_tracks', String(v));
+}
+
 function applyTemplate(template, ex) {
     return template
         .replace('{artist}', ex.artist)
@@ -46,9 +54,16 @@ window.toggleSettings = function () {
     if (open) {
         templateInput.value = loadTemplate();
         updatePreview();
+        document.getElementById('limit-input').value = loadLimit();
         templateInput.focus();
     }
 };
+
+document.getElementById('limit-input')?.addEventListener('change', (e) => {
+    const val = Math.max(1, Math.min(500, parseInt(e.target.value, 10) || 50));
+    e.target.value = val;
+    saveLimit(val);
+});
 
 window.insertVar = function (v) {
     const start = templateInput.selectionStart;
@@ -110,11 +125,11 @@ window.submitGenerate = async function () {
                 url: query,
                 filename_template: loadTemplate(),
                 query_type: _selectedQueryType,
+                max_tracks: loadLimit(),
             }),
         });
         if (!res.ok) throw new Error((await res.json()).detail || `Erro ${res.status}`);
         const job = await res.json();
-        if (job.max_tracks) limitHint.textContent = `Limite: primeiras ${job.max_tracks} faixas por playlist`;
         const card = buildCard(job);
         jobsEl.prepend(card);
         card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -140,9 +155,7 @@ window.submitGenerate = async function () {
                 startSSE(job.id);
             }
         }
-        if (jobs.length > 0 && jobs[0].max_tracks) {
-            limitHint.textContent = `Limite: primeiras ${jobs[0].max_tracks} faixas por playlist`;
-        }
+        // limite agora configurado no painel ⚙
         updateToolbar();
     } catch { /* server not ready yet */ }
 })();
@@ -265,12 +278,11 @@ async function createJobFromUrl(url) {
         const res = await fetch('/api/jobs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url, filename_template: loadTemplate() }),
+            body: JSON.stringify({ url, filename_template: loadTemplate(), max_tracks: loadLimit() }),
         });
         if (!res.ok) throw new Error((await res.json()).detail || `Erro ${res.status}`);
 
         const job = await res.json();
-        if (job.max_tracks) limitHint.textContent = `Limite: primeiras ${job.max_tracks} faixas por playlist`;
         const card = buildCard(job);
         jobsEl.prepend(card);
         card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -458,7 +470,7 @@ window.downloadAgain = function (jobId) {
         fetch('/api/jobs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: card.dataset.url, filename_template: loadTemplate(), query_type: queryType }),
+            body: JSON.stringify({ url: card.dataset.url, filename_template: loadTemplate(), query_type: queryType, max_tracks: loadLimit() }),
         }).then(r => r.json()).then(job => {
             const newCard = buildCard(job);
             jobsEl.prepend(newCard);

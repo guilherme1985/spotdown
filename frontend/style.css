@@ -188,6 +188,37 @@ body {
   font-family: monospace;
 }
 
+.settings-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 14px 0;
+}
+
+.settings-limit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.limit-input {
+  width: 80px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 14px;
+  padding: 7px 10px;
+  outline: none;
+  transition: border-color 0.2s;
+  text-align: center;
+}
+.limit-input:focus { border-color: var(--accent); }
+
+.limit-hint-text {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 /* ── Connect section ── */
 .connect-section {
   text-align: center;
