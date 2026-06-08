@@ -53,6 +53,7 @@ async def auth_login():
 
 
 @app.get("/auth/callback")
+@app.get("/callback")
 async def auth_callback(code: str):
     await asyncio.to_thread(handle_callback, code)
     return RedirectResponse(url="/")
