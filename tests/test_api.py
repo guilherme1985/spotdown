@@ -33,6 +33,22 @@ def test_create_job_invalid_query_type():
     assert r.status_code == 422  # validação do Pydantic
 
 
+def test_create_job_save_failure_returns_json_error(monkeypatch):
+    """Falha ao gravar no banco deve virar erro 500 em JSON com detail
+    (e não o texto 'Internal Server Error' que quebrava o parse no frontend)."""
+    async def failing_save(job):
+        raise Exception("attempt to write a readonly database")
+
+    monkeypatch.setattr(api, "save_job", failing_save)
+    client = TestClient(api.app)
+    r = client.post("/api/jobs", json={"url": "x"})
+    assert r.status_code == 500
+    body = r.json()  # precisa ser JSON válido
+    assert "downloads" in body["detail"].lower()
+    # o job não deve ter ficado registrado em memória após a falha
+    assert api._jobs == {}
+
+
 # ── Orquestração: _run_download_phase ─────────────────────────────────────────
 
 async def test_download_phase_counts_results(monkeypatch, tmp_path):

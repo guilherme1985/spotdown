@@ -115,7 +115,15 @@ async def create_job(req: JobRequest):
     }
     _jobs[job_id] = job
     _cancel_events[job_id] = asyncio.Event()
-    await save_job(job)
+    try:
+        await save_job(job)
+    except Exception as e:
+        del _jobs[job_id]
+        del _cancel_events[job_id]
+        raise HTTPException(
+            status_code=500,
+            detail=f"Falha ao gravar no banco — verifique as permissões da pasta downloads ({e})",
+        )
     asyncio.create_task(_run_job(job_id))
     return job
 

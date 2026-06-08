@@ -148,7 +148,7 @@ async function _createGenerateJob(query, queryType) {
                 max_tracks: loadLimit(),
             }),
         });
-        if (!res.ok) throw new Error((await res.json()).detail || `Erro ${res.status}`);
+        if (!res.ok) throw new Error(await _errorDetail(res));
         const job = await res.json();
         const card = buildCard(job);
         jobsEl.prepend(card);
@@ -170,7 +170,7 @@ async function _searchAndShowPlaylists(query) {
     btn.textContent = 'Buscando...';
     try {
         const res = await fetch(`/api/spotify/search-playlists?q=${encodeURIComponent(query)}&limit=5`);
-        if (!res.ok) throw new Error((await res.json()).detail);
+        if (!res.ok) throw new Error(await _errorDetail(res));
         const playlists = await res.json();
         if (!playlists.length) throw new Error('Nenhuma playlist encontrada.');
         _showPicker(playlists);
@@ -314,10 +314,7 @@ window.submitCredentials = async function () {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
         });
-        if (!res.ok) {
-            const { detail } = await res.json();
-            throw new Error(detail || 'Credenciais inválidas.');
-        }
+        if (!res.ok) throw new Error(await _errorDetail(res));
         closeModal();
         setSpotifyState(true);
     } catch (err) {
@@ -347,7 +344,7 @@ async function createJobFromUrl(url) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url, filename_template: loadTemplate(), max_tracks: loadLimit() }),
         });
-        if (!res.ok) throw new Error((await res.json()).detail || `Erro ${res.status}`);
+        if (!res.ok) throw new Error(await _errorDetail(res));
 
         const job = await res.json();
         const card = buildCard(job);
@@ -527,7 +524,7 @@ window.retryJob = async function (jobId, btn) {
     btn.textContent = 'Iniciando…';
     try {
         const res = await fetch(`/api/jobs/${jobId}/retry`, { method: 'POST' });
-        if (!res.ok) throw new Error((await res.json()).detail);
+        if (!res.ok) throw new Error(await _errorDetail(res));
         refreshCard(await res.json());
         startSSE(jobId);
     } catch (err) {
@@ -581,6 +578,17 @@ window.clearHistory = async function () {
 };
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
+async function _errorDetail(res) {
+    // Extrai a mensagem de erro tolerando respostas que não são JSON
+    // (ex: 500 com corpo "Internal Server Error").
+    try {
+        const data = await res.json();
+        return data.detail || `Erro ${res.status}`;
+    } catch {
+        return `Erro ${res.status} — ${res.statusText || 'falha no servidor'}`;
+    }
+}
+
 function esc(str) {
     return (str ?? '')
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')

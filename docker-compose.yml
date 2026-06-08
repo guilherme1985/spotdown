@@ -3,9 +3,6 @@ services:
     build: .
     ports:
       - "5001:8000"
-    # Roda como o usuário do host para que os arquivos baixados não fiquem como root.
-    # Ajuste PUID/PGID no .env se seu usuário não for 1000:1000 (veja com `id -u` / `id -g`).
-    user: "${PUID:-1000}:${PGID:-1000}"
     volumes:
       - ./downloads:/app/downloads
     env_file:
@@ -15,4 +12,9 @@ services:
       DOWNLOAD_DIR: downloads
       DOWNLOAD_RETRIES: "2"   # tentativas extras em erros transitórios por faixa
       HOME: /tmp
+      # O entrypoint sobe como root, faz chown da pasta downloads para PUID:PGID
+      # (corrige arquivos antigos criados como root) e dropa o privilégio via gosu.
+      # Ajuste no .env se seu usuário não for 1000:1000 (veja com `id -u` / `id -g`).
+      PUID: "${PUID:-1000}"
+      PGID: "${PGID:-1000}"
     restart: unless-stopped
