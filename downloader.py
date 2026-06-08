@@ -170,8 +170,25 @@ def _write_tags(
         pass
 
 
+# Nomes reservados do Windows (não podem ser nome de arquivo, com ou sem extensão).
+_WINDOWS_RESERVED = {
+    "con", "prn", "aux", "nul",
+    *(f"com{i}" for i in range(1, 10)),
+    *(f"lpt{i}" for i in range(1, 10)),
+}
+_MAX_NAME_LEN = 180  # deixa folga para extensão e limite de 255 do caminho
+
+
 def _safe_name(name: str) -> str:
     invalid = r'\/:*?"<>|'
     for ch in invalid:
         name = name.replace(ch, "")
-    return name.strip()
+    # remove caracteres de controle
+    name = "".join(ch for ch in name if ch.isprintable())
+    name = name.strip().rstrip(".")  # Windows não permite ponto no fim
+    if len(name) > _MAX_NAME_LEN:
+        name = name[:_MAX_NAME_LEN].strip()
+    # prefixa se colidir com nome reservado (considera o nome antes da extensão)
+    if name.split(".")[0].lower() in _WINDOWS_RESERVED:
+        name = f"_{name}"
+    return name

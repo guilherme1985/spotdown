@@ -55,6 +55,33 @@ def test_safe_name_trims_whitespace():
     assert downloader._safe_name("  hello  ") == "hello"
 
 
+def test_safe_name_prefixes_reserved_windows_names():
+    assert downloader._safe_name("CON") == "_CON"
+    assert downloader._safe_name("con") == "_con"
+    assert downloader._safe_name("PRN") == "_PRN"
+    assert downloader._safe_name("COM1") == "_COM1"
+    assert downloader._safe_name("nul.mp3") == "_nul.mp3"
+
+
+def test_safe_name_allows_reserved_as_substring():
+    # "Control" contém "con" mas não é o nome reservado exato
+    assert downloader._safe_name("Control") == "Control"
+
+
+def test_safe_name_truncates_long_names():
+    long = "a" * 300
+    out = downloader._safe_name(long)
+    assert len(out) <= 180
+
+
+def test_safe_name_strips_trailing_dot():
+    assert downloader._safe_name("nome.") == "nome"
+
+
+def test_safe_name_removes_control_chars():
+    assert downloader._safe_name("a\x00b\x1fc") == "abc"
+
+
 # ── Diagnóstico de falhas ─────────────────────────────────────────────────────
 
 def test_humanize_error_video_unavailable():
