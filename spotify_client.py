@@ -15,14 +15,19 @@ def _get_client() -> Spotdl:
         client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
         if not client_id or not client_secret:
             raise EnvironmentError(
-                "Defina SPOTIFY_CLIENT_ID e SPOTIFY_CLIENT_SECRET no arquivo .env"
+                "Credenciais não configuradas. Informe o Client ID e Client Secret do Spotify."
             )
-        _client = Spotdl(
-            client_id=client_id,
-            client_secret=client_secret,
-            no_cache=True,
-        )
+        _client = Spotdl(client_id=client_id, client_secret=client_secret, no_cache=True)
     return _client
+
+
+def connect_with_credentials(client_id: str, client_secret: str) -> None:
+    """Cria um novo cliente com as credenciais fornecidas, substituindo o atual."""
+    global _client
+    new_client = Spotdl(client_id=client_id, client_secret=client_secret, no_cache=True)
+    # Faz uma busca simples para validar as credenciais antes de aceitar
+    new_client.search(["spotify:track:4uLU6hMCjMI75M1A2tKUQC"])
+    _client = new_client
 
 
 def get_playlist_tracks(url: str) -> tuple[str, list[dict]]:

@@ -121,15 +121,74 @@ function setSpotifyState(connected) {
 
 window.toggleSpotify = async function () {
     if (_spotifyConnected) {
-        // Desconectar: limpa o cliente em cache no servidor e reverifica
         await fetch('/api/spotify/disconnect', { method: 'POST' });
         setSpotifyState(false);
     } else {
-        // Reconectar: testa novamente
+        // Tenta primeiro com credenciais do .env
         spotifyBtn.disabled = true;
         spotifyBtn.textContent = 'Verificando…';
-        await checkSpotifyStatus();
+        const { connected } = await fetch('/api/spotify/status').then(r => r.json());
         spotifyBtn.disabled = false;
+        if (connected) {
+            setSpotifyState(true);
+        } else {
+            // .env não funcionou — abre modal de credenciais
+            openModal();
+        }
+    }
+};
+
+// ── Modal de credenciais ──────────────────────────────────────────────────────
+function openModal() {
+    document.getElementById('credentials-modal').classList.remove('hidden');
+    document.getElementById('modal-client-id').focus();
+    document.getElementById('modal-error').classList.add('hidden');
+    document.getElementById('modal-client-id').value = '';
+    document.getElementById('modal-client-secret').value = '';
+}
+
+window.closeModal = function () {
+    document.getElementById('credentials-modal').classList.add('hidden');
+};
+
+window.closeModalOutside = function (e) {
+    if (e.target.id === 'credentials-modal') closeModal();
+};
+
+window.submitCredentials = async function () {
+    const clientId     = document.getElementById('modal-client-id').value.trim();
+    const clientSecret = document.getElementById('modal-client-secret').value.trim();
+    const errorEl      = document.getElementById('modal-error');
+    const connectBtn   = document.getElementById('modal-connect-btn');
+
+    if (!clientId || !clientSecret) {
+        errorEl.textContent = 'Preencha os dois campos.';
+        errorEl.classList.remove('hidden');
+        return;
+    }
+
+    connectBtn.disabled = true;
+    connectBtn.textContent = 'Conectando…';
+    errorEl.classList.add('hidden');
+
+    try {
+        const res = await fetch('/api/spotify/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+        });
+        if (!res.ok) {
+            const { detail } = await res.json();
+            throw new Error(detail || 'Credenciais inválidas.');
+        }
+        closeModal();
+        setSpotifyState(true);
+    } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.remove('hidden');
+    } finally {
+        connectBtn.disabled = false;
+        connectBtn.textContent = 'Conectar';
     }
 };
 

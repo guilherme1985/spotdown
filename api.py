@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from db import init_db, load_jobs, save_job
 from downloader import download_track, DEFAULT_TEMPLATE
-from spotify_client import get_playlist_tracks, _get_client
+from spotify_client import get_playlist_tracks, _get_client, connect_with_credentials
 
 OUTPUT_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
 MAX_TRACKS = int(os.getenv("MAX_TRACKS_PER_PLAYLIST", "50"))
@@ -55,6 +55,20 @@ async def spotify_disconnect():
     import spotify_client
     spotify_client._client = None
     return {"connected": False}
+
+
+class ConnectRequest(BaseModel):
+    client_id: str
+    client_secret: str
+
+
+@app.post("/api/spotify/connect")
+async def spotify_connect(req: ConnectRequest):
+    try:
+        await asyncio.to_thread(connect_with_credentials, req.client_id, req.client_secret)
+        return {"connected": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Credenciais inválidas: {e}")
 
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
