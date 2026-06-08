@@ -147,6 +147,40 @@ async def test_run_job_truncates_to_max_tracks(monkeypatch, tmp_path):
     assert job["status"] == "completed"
 
 
+def test_download_zip_success(monkeypatch, tmp_path):
+    import zipfile, io
+    # prepara um job concluído com pasta e mp3s reais
+    monkeypatch.setattr(api, "OUTPUT_DIR", str(tmp_path))
+    pl_dir = tmp_path / "MinhaLista"
+    pl_dir.mkdir()
+    (pl_dir / "A - 1.mp3").write_text("audio1")
+    (pl_dir / "A - 2.mp3").write_text("audio2")
+
+    api._jobs["z1"] = {"id": "z1", "status": "completed", "playlist_name": "MinhaLista"}
+
+    client = TestClient(api.app)
+    r = client.get("/api/jobs/z1/zip")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/zip"
+
+    zf = zipfile.ZipFile(io.BytesIO(r.content))
+    assert sorted(zf.namelist()) == ["A - 1.mp3", "A - 2.mp3"]
+
+
+def test_download_zip_no_files(monkeypatch, tmp_path):
+    monkeypatch.setattr(api, "OUTPUT_DIR", str(tmp_path))
+    api._jobs["z2"] = {"id": "z2", "status": "completed", "playlist_name": "Vazia"}
+    client = TestClient(api.app)
+    r = client.get("/api/jobs/z2/zip")
+    assert r.status_code == 404
+
+
+def test_download_zip_job_not_found():
+    client = TestClient(api.app)
+    r = client.get("/api/jobs/inexistente/zip")
+    assert r.status_code == 404
+
+
 async def test_run_job_handles_fetch_error(monkeypatch):
     def fake_get(url, query_type):
         raise ValueError("playlist não encontrada")

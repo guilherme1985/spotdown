@@ -469,6 +469,11 @@ function actionsHTML(job) {
     if (['completed', 'cancelled'].includes(job.status) && retryable > 0) {
         btns.push(`<button class="btn-accent" onclick="retryJob('${job.id}', this)">Tentar novamente (${retryable})</button>`);
     }
+    // ZIP disponível quando há faixas efetivamente em disco (baixadas ou já existentes)
+    const onDisk = job.tracks.filter(t => ['done', 'skipped'].includes(t.status)).length;
+    if (['completed', 'cancelled'].includes(job.status) && onDisk > 0) {
+        btns.push(`<button class="btn-accent" onclick="downloadZip('${job.id}')">Baixar ZIP</button>`);
+    }
     if (['completed', 'cancelled', 'error'].includes(job.status)) {
         btns.push(`<button class="btn-secondary" onclick="downloadAgain('${job.id}')">Baixar novamente</button>`);
         btns.push(`<button class="btn-danger" onclick="deleteJob('${job.id}', this)">Excluir</button>`);
@@ -532,6 +537,11 @@ window.retryJob = async function (jobId, btn) {
         btn.disabled = false;
         btn.textContent = 'Tentar novamente';
     }
+};
+
+window.downloadZip = function (jobId) {
+    // Content-Disposition: attachment faz o browser baixar sem navegar
+    window.location.href = `/api/jobs/${jobId}/zip`;
 };
 
 window.downloadAgain = function (jobId) {

@@ -1,7 +1,9 @@
 import asyncio
 import json
 import os
+import tempfile
 import uuid
+import zipfile
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -9,9 +11,10 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 
 from db import init_db, load_jobs, save_job
 from downloader import download_track, DEFAULT_TEMPLATE
@@ -222,6 +225,40 @@ async def job_events(job_id: str):
         stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
+@app.get("/api/jobs/{job_id}/zip")
+async def download_zip(job_id: str):
+    """Compacta a pasta da playlist do job e devolve como download .zip."""
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job não encontrado")
+
+    playlist_name = job.get("playlist_name")
+    if not playlist_name:
+        raise HTTPException(status_code=400, detail="Job ainda não tem pasta de download")
+
+    src_dir = Path(OUTPUT_DIR) / playlist_name
+    mp3s = sorted(src_dir.glob("*.mp3")) if src_dir.is_dir() else []
+    if not mp3s:
+        raise HTTPException(status_code=404, detail="Nenhum arquivo baixado para compactar")
+
+    def _make_zip() -> str:
+        tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
+        tmp.close()
+        # ZIP_STORED: MP3 já é comprimido, não vale o custo de recomprimir
+        with zipfile.ZipFile(tmp.name, "w", zipfile.ZIP_STORED) as zf:
+            for mp3 in mp3s:
+                zf.write(mp3, arcname=mp3.name)
+        return tmp.name
+
+    zip_path = await asyncio.to_thread(_make_zip)
+    return FileResponse(
+        zip_path,
+        media_type="application/zip",
+        filename=f"{playlist_name}.zip",
+        background=BackgroundTask(os.remove, zip_path),
     )
 
 
