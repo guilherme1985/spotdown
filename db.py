@@ -5,11 +5,12 @@ from pathlib import Path
 import aiosqlite
 
 _download_dir = os.getenv("DOWNLOAD_DIR", "downloads")
-DB_PATH = os.path.join(_download_dir, "jobs.db")
+_db_dir = os.getenv("DB_DIR", "data")
+DB_PATH = os.path.join(_db_dir, "jobs.db")
 
 
 async def init_db():
-    Path(_download_dir).mkdir(parents=True, exist_ok=True)
+    Path(_db_dir).mkdir(parents=True, exist_ok=True)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS jobs (

@@ -3,7 +3,7 @@ import db
 
 
 async def test_db_roundtrip(monkeypatch, tmp_path):
-    monkeypatch.setattr(db, "_download_dir", str(tmp_path))
+    monkeypatch.setattr(db, "_db_dir", str(tmp_path))
     monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "jobs.db"))
 
     await db.init_db()
@@ -25,7 +25,7 @@ async def test_db_roundtrip(monkeypatch, tmp_path):
 
 
 async def test_db_save_replaces_existing(monkeypatch, tmp_path):
-    monkeypatch.setattr(db, "_download_dir", str(tmp_path))
+    monkeypatch.setattr(db, "_db_dir", str(tmp_path))
     monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "jobs.db"))
 
     await db.init_db()
@@ -41,7 +41,7 @@ async def test_db_save_replaces_existing(monkeypatch, tmp_path):
 
 
 async def test_db_load_orders_by_created_at(monkeypatch, tmp_path):
-    monkeypatch.setattr(db, "_download_dir", str(tmp_path))
+    monkeypatch.setattr(db, "_db_dir", str(tmp_path))
     monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "jobs.db"))
 
     await db.init_db()

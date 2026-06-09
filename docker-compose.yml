@@ -4,12 +4,14 @@ services:
     ports:
       - "5001:8000"
     volumes:
-      - ./downloads:/app/downloads
+      - /home/guilherme/Músicas/:/app/downloads
+      - ./data:/app/data
     env_file:
       - .env
     environment:
       MAX_TRACKS_PER_PLAYLIST: "50"
       DOWNLOAD_DIR: downloads
+      DB_DIR: data
       DOWNLOAD_RETRIES: "2"   # tentativas extras em erros transitórios por faixa
       # HOME é definido pelo entrypoint (após o gosu), não aqui.
       # O entrypoint sobe como root, faz chown da pasta downloads para PUID:PGID
