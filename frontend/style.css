@@ -69,28 +69,6 @@ body {
 .spotify-status.connected    { color: var(--accent); }
 .spotify-status.disconnected { color: var(--error); }
 
-.btn-spotify-header {
-  font-size: 11px;
-  font-weight: 600;
-  border-radius: 20px;
-  padding: 3px 10px;
-  cursor: pointer;
-  border: 1px solid;
-  background: transparent;
-  transition: background 0.15s;
-}
-.btn-spotify-header.disconnected {
-  color: var(--error);
-  border-color: rgba(233,20,41,0.4);
-}
-.btn-spotify-header.disconnected:hover { background: rgba(233,20,41,0.08); }
-.btn-spotify-header.connect {
-  color: var(--accent);
-  border-color: rgba(29,185,84,0.4);
-}
-.btn-spotify-header.connect:hover { background: rgba(29,185,84,0.08); }
-.btn-spotify-header:disabled { opacity: 0.5; cursor: not-allowed; }
-
 /* ── Settings button ── */
 .btn-settings {
   background: transparent;
@@ -696,95 +674,6 @@ body {
   font-size: 11px;
   color: var(--text-dim);
   margin-top: 2px;
-}
-
-/* ── Modal ── */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(4px);
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.modal-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 28px;
-  width: 100%;
-  max-width: 420px;
-  animation: slide-in 0.2s ease;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 17px;
-  font-weight: 700;
-  margin-bottom: 12px;
-}
-
-.modal-desc {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-bottom: 20px;
-  line-height: 1.6;
-}
-
-.modal-desc a {
-  color: var(--accent);
-  text-decoration: none;
-}
-.modal-desc a:hover { text-decoration: underline; }
-
-.modal-field {
-  margin-bottom: 14px;
-}
-
-.modal-field label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-
-.modal-input {
-  width: 100%;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--text);
-  font-size: 14px;
-  padding: 10px 12px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-.modal-input:focus { border-color: var(--accent); }
-
-.modal-error {
-  font-size: 13px;
-  color: var(--error);
-  background: rgba(233,20,41,0.06);
-  border: 1px solid rgba(233,20,41,0.2);
-  border-radius: var(--radius);
-  padding: 8px 12px;
-  margin-bottom: 14px;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
 }
 
 /* Footer */

@@ -116,14 +116,6 @@ def search_playlists(query: str, limit: int = 5) -> list[dict]:
     ]
 
 
-def connect_with_credentials(client_id: str, client_secret: str) -> None:
-    """Cria novo cliente com as credenciais fornecidas, validando antes de aceitar."""
-    global _client, _search_client
-    new_client = Spotdl(client_id=client_id, client_secret=client_secret, no_cache=True)
-    new_client.search(["spotify:track:4uLU6hMCjMI75M1A2tKUQC"])
-    _client = new_client
-    _search_client = None
-
 
 def get_playlist_tracks(url: str, query_type: str = "url") -> tuple[str, list[dict]]:
     """Retorna (nome_da_playlist, lista_de_faixas)."""

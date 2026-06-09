@@ -18,7 +18,7 @@ from starlette.background import BackgroundTask
 
 from db import init_db, load_jobs, save_job
 from downloader import download_track, DEFAULT_TEMPLATE
-from spotify_client import get_playlist_tracks, _get_client, connect_with_credentials, search_playlists
+from spotify_client import get_playlist_tracks, _get_search_client, search_playlists
 
 OUTPUT_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
 MAX_TRACKS = int(os.getenv("MAX_TRACKS_PER_PLAYLIST", "50"))
@@ -49,7 +49,7 @@ app = FastAPI(title="SpotDownload API", lifespan=lifespan)
 @app.get("/api/spotify/status")
 async def spotify_status():
     try:
-        await asyncio.to_thread(_get_client)
+        await asyncio.to_thread(_get_search_client)
         return {"connected": True}
     except Exception as e:
         return {"connected": False, "error": str(e)}
@@ -62,27 +62,6 @@ async def search_playlists_endpoint(q: str, limit: int = 5):
         return results
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.post("/api/spotify/disconnect")
-async def spotify_disconnect():
-    import spotify_client
-    spotify_client._client = None
-    return {"connected": False}
-
-
-class ConnectRequest(BaseModel):
-    client_id: str
-    client_secret: str
-
-
-@app.post("/api/spotify/connect")
-async def spotify_connect(req: ConnectRequest):
-    try:
-        await asyncio.to_thread(connect_with_credentials, req.client_id, req.client_secret)
-        return {"connected": True}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Credenciais inválidas: {e}")
 
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────

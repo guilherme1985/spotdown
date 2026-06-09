@@ -5,7 +5,6 @@ const limitHint       = document.getElementById('limit-hint');
 const jobsEl          = document.getElementById('jobs');
 const jobsToolbar     = document.getElementById('jobs-toolbar');
 const spotifyStatus   = document.getElementById('spotify-status');
-const spotifyBtn      = document.getElementById('spotify-btn');
 const settingsPanel   = document.getElementById('settings-panel');
 const templateInput   = document.getElementById('template-input');
 const templatePreview = document.getElementById('template-preview');
@@ -14,8 +13,6 @@ const DEFAULT_TEMPLATE = '{artist} - {name}';
 const PREVIEW_EXAMPLE  = { artist: 'The Weeknd', name: 'Blinding Lights', album: 'After Hours', number: '03', releaseDate: '2019' };
 
 const activeSSE = {};
-let _spotifyConnected = false;
-
 // ── Template settings ─────────────────────────────────────────────────────────
 function loadTemplate() {
     return localStorage.getItem('filename_template') || DEFAULT_TEMPLATE;
@@ -227,7 +224,7 @@ window.selectPlaylist = async function (url) {
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
-    await checkSpotifyStatus();
+    await updateSpotifyIndicator();
     try {
         const jobs = await fetch('/api/jobs').then(r => r.json());
         for (const job of [...jobs].reverse()) {
@@ -245,100 +242,17 @@ function updateToolbar() {
     jobsToolbar.classList.toggle('hidden', jobsEl.children.length === 0);
 }
 
-// ── Spotify status ────────────────────────────────────────────────────────────
-async function checkSpotifyStatus() {
+// ── Spotify status (read-only indicator) ─────────────────────────────────────
+async function updateSpotifyIndicator() {
     try {
         const { connected } = await fetch('/api/spotify/status').then(r => r.json());
-        setSpotifyState(connected);
-    } catch {
-        setSpotifyState(false);
-    }
-}
-
-function setSpotifyState(connected) {
-    _spotifyConnected = connected;
-    if (connected) {
         spotifyStatus.textContent = '● Spotify';
-        spotifyStatus.className = 'spotify-status connected';
-        spotifyBtn.textContent = 'Desconectar';
-        spotifyBtn.className = 'btn-spotify-header disconnected';
-    } else {
+        spotifyStatus.className = 'spotify-status ' + (connected ? 'connected' : 'disconnected');
+    } catch {
         spotifyStatus.textContent = '● Spotify';
         spotifyStatus.className = 'spotify-status disconnected';
-        spotifyBtn.textContent = 'Conectar';
-        spotifyBtn.className = 'btn-spotify-header connect';
     }
 }
-
-window.toggleSpotify = async function () {
-    if (_spotifyConnected) {
-        await fetch('/api/spotify/disconnect', { method: 'POST' });
-        setSpotifyState(false);
-    } else {
-        // Tenta primeiro com credenciais do .env
-        spotifyBtn.disabled = true;
-        spotifyBtn.textContent = 'Verificando…';
-        const { connected } = await fetch('/api/spotify/status').then(r => r.json());
-        spotifyBtn.disabled = false;
-        if (connected) {
-            setSpotifyState(true);
-        } else {
-            // .env não funcionou — abre modal de credenciais
-            openModal();
-        }
-    }
-};
-
-// ── Modal de credenciais ──────────────────────────────────────────────────────
-function openModal() {
-    document.getElementById('credentials-modal').classList.remove('hidden');
-    document.getElementById('modal-client-id').focus();
-    document.getElementById('modal-error').classList.add('hidden');
-    document.getElementById('modal-client-id').value = '';
-    document.getElementById('modal-client-secret').value = '';
-}
-
-window.closeModal = function () {
-    document.getElementById('credentials-modal').classList.add('hidden');
-};
-
-window.closeModalOutside = function (e) {
-    if (e.target.id === 'credentials-modal') closeModal();
-};
-
-window.submitCredentials = async function () {
-    const clientId     = document.getElementById('modal-client-id').value.trim();
-    const clientSecret = document.getElementById('modal-client-secret').value.trim();
-    const errorEl      = document.getElementById('modal-error');
-    const connectBtn   = document.getElementById('modal-connect-btn');
-
-    if (!clientId || !clientSecret) {
-        errorEl.textContent = 'Preencha os dois campos.';
-        errorEl.classList.remove('hidden');
-        return;
-    }
-
-    connectBtn.disabled = true;
-    connectBtn.textContent = 'Conectando…';
-    errorEl.classList.add('hidden');
-
-    try {
-        const res = await fetch('/api/spotify/connect', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
-        });
-        if (!res.ok) throw new Error(await _errorDetail(res));
-        closeModal();
-        setSpotifyState(true);
-    } catch (err) {
-        errorEl.textContent = err.message;
-        errorEl.classList.remove('hidden');
-    } finally {
-        connectBtn.disabled = false;
-        connectBtn.textContent = 'Conectar';
-    }
-};
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 form.addEventListener('submit', async (e) => {
