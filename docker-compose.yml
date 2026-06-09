@@ -4,7 +4,7 @@ services:
     ports:
       - "5001:8000"
     volumes:
-      - /home/guilherme/Músicas/:/app/downloads
+      - ./downloads/:/app/downloads
       - ./data:/app/data
     env_file:
       - .env
