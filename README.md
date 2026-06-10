@@ -80,3 +80,11 @@ Para alterar o limite, edite `MAX_TRACKS_PER_PLAYLIST` em `docker-compose.yml`.
 - Funciona apenas com playlists **públicas**.
 - O áudio vem do YouTube — a correspondência é heurística e pode baixar uma versão diferente em músicas menos conhecidas.
 - O histórico de downloads persiste em `./downloads/jobs.db` e sobrevive a reinicializações do container.
+
+---
+
+## ☕ Apoie o projeto
+
+Se este projeto te ajudou, considere me pagar um café!
+
+[![Buy Me A Coffee](https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=☕&slug=guilhermeromero&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff)](https://buymeacoffee.com/guilhermeromero)
