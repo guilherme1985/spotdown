@@ -338,8 +338,13 @@ function cardHTML(job) {
     };
     const title = job.playlist_name || (job.url.length > 65 ? job.url.slice(0, 62) + '…' : job.url);
     const pct   = job.total > 0 ? Math.round((job.done / job.total) * 100) : 0;
+    const coverUrl = job.tracks?.find(t => t.cover_url)?.cover_url;
+    const coverImg = coverUrl
+        ? `<img class="card-cover" src="${esc(coverUrl)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+        : '';
     return `
         <div class="job-header">
+            ${coverImg}
             <span class="job-url">${esc(title)}</span>
             <span class="status-badge badge-${job.status}">${labels[job.status] || job.status}</span>
         </div>
@@ -373,6 +378,9 @@ function bodyHTML(job, pct) {
     `;
 
     if (job.status === 'downloading') {
+        if (job.auto_retry_attempt > 0) {
+            html += `<div class="auto-retry-label">↺ Tentativa automática ${job.auto_retry_attempt + 1}…</div>`;
+        }
         const eta = _etaText(job);
         if (eta) html += `<div class="eta-row">${eta}</div>`;
     }
@@ -565,6 +573,26 @@ window.deleteJob = async function (jobId, btn) {
     }
 };
 
+window.retryAllFailed = async function () {
+    const btn = document.getElementById('retry-all-btn');
+    btn.disabled = true;
+    btn.textContent = 'Iniciando…';
+    try {
+        const res = await fetch('/api/jobs/retry-failed', { method: 'POST' });
+        if (!res.ok) throw new Error(await _errorDetail(res));
+        const { jobs } = await res.json();
+        for (const job of jobs) {
+            refreshCard(job);
+            startSSE(job.id);
+        }
+    } catch (err) {
+        alert(`Erro: ${err.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Retentar falhas';
+    }
+};
+
 window.clearHistory = async function () {
     const { removed } = await fetch('/api/jobs', { method: 'DELETE' }).then(r => r.json());
     if (removed === 0) return;
@@ -576,18 +604,29 @@ window.clearHistory = async function () {
 
 // ── Velocidade / ETA ──────────────────────────────────────────────────────────
 function _etaText(job) {
-    if (!job.download_started_at) return '';
-    const elapsed = (Date.now() - new Date(job.download_started_at).getTime()) / 1000;
+    // Velocidade agregada das faixas em download ativo
+    const speedBps = job.tracks
+        .filter(t => t.status === 'downloading' && t.speed_bps)
+        .reduce((s, t) => s + t.speed_bps, 0);
+    const speedStr = speedBps > 0 ? _fmtSpeed(speedBps) : '';
+
+    if (!job.download_started_at) return speedStr;
+    const elapsed   = (Date.now() - new Date(job.download_started_at).getTime()) / 1000;
     const processed = job.done - (job.done_at_start || 0);
-    if (elapsed < 1 || processed < 1) return '';
-
-    const rate = processed / elapsed;              // faixas por segundo
-    const perMin = rate * 60;
     const remaining = job.total - job.done;
-    if (remaining <= 0) return '';
 
-    const etaSec = Math.round(remaining / rate);
-    return `~${_fmtDuration(etaSec)} restantes · ${perMin.toFixed(1)} faixas/min`;
+    if (processed < 1 || elapsed < 1 || remaining <= 0) return speedStr;
+
+    const rate    = processed / elapsed;
+    const perMin  = rate * 60;
+    const etaSec  = Math.round(remaining / rate);
+    const etaStr  = `~${_fmtDuration(etaSec)} restantes · ${perMin.toFixed(1)} faixas/min`;
+    return speedStr ? `${etaStr} · ${speedStr}` : etaStr;
+}
+
+function _fmtSpeed(bps) {
+    if (bps >= 1048576) return `${(bps / 1048576).toFixed(1)} MB/s`;
+    return `${Math.round(bps / 1024)} KB/s`;
 }
 
 function _fmtDuration(sec) {

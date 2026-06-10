@@ -290,6 +290,20 @@ body {
 
 .btn-clear-history:hover { color: var(--text-muted); }
 
+.btn-retry-all {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.35);
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 20px;
+  transition: background 0.15s;
+}
+.btn-retry-all:hover { background: rgba(245,158,11,0.16); }
+.btn-retry-all:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* ── Main layout ── */
 .main {
   max-width: 860px;
@@ -404,6 +418,14 @@ body {
   gap: 12px;
 }
 
+.card-cover {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .job-url {
   font-size: 12px;
   color: var(--text-dim);
@@ -468,6 +490,12 @@ body {
   font-size: 11px;
   color: var(--text-dim);
   margin-bottom: 12px;
+}
+
+.auto-retry-label {
+  font-size: 11px;
+  color: var(--warning);
+  margin-bottom: 6px;
 }
 
 /* Current tracks (parallel) */
@@ -552,18 +580,26 @@ body {
 }
 
 .btn-generate-toggle {
-  background: none;
-  border: none;
-  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 4px 10px;
+  padding: 6px 16px;
   letter-spacing: 0.2px;
-  transition: color 0.15s;
   border-radius: 20px;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
-.btn-generate-toggle:hover  { color: var(--text-muted); }
-.btn-generate-toggle.active { color: var(--accent); }
+.btn-generate-toggle:hover {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+.btn-generate-toggle.active {
+  background: rgba(29,185,84,0.1);
+  border-color: rgba(29,185,84,0.4);
+  color: var(--accent);
+}
 
 .segmented-control {
   display: flex;

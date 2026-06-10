@@ -2,7 +2,7 @@ import os
 import re
 import time
 import urllib.request
-from typing import NamedTuple
+from typing import Callable, NamedTuple
 
 import yt_dlp
 from mutagen.id3 import APIC, ID3, TALB, TIT2, TPE1, TRCK
@@ -39,6 +39,7 @@ def download_track(
     filename_template: str = DEFAULT_TEMPLATE,
     retries: int = DEFAULT_RETRIES,
     retry_delay: float = RETRY_DELAY,
+    speed_callback: Callable[[float], None] | None = None,
 ) -> DownloadResult:
     """Busca no YouTube e baixa o áudio como MP3.
 
@@ -70,6 +71,11 @@ def download_track(
             }
         ],
     }
+    if speed_callback:
+        def _progress_hook(d: dict) -> None:
+            if d.get("status") == "downloading" and d.get("speed"):
+                speed_callback(d["speed"])
+        ydl_opts["progress_hooks"] = [_progress_hook]
 
     last_error = "Erro desconhecido"
     for attempt in range(retries + 1):

@@ -22,6 +22,7 @@ from spotify_client import get_playlist_tracks, _get_search_client, search_playl
 
 OUTPUT_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
 MAX_TRACKS = int(os.getenv("MAX_TRACKS_PER_PLAYLIST", "50"))
+MAX_AUTO_RETRIES = int(os.getenv("AUTO_RETRY_MAX", "2"))
 
 _jobs: dict[str, dict] = {}
 _cancel_events: dict[str, asyncio.Event] = {}
@@ -162,6 +163,31 @@ async def delete_or_cancel_job(job_id: str):
         await db.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
         await db.commit()
     return {"action": "deleted"}
+
+
+@app.post("/api/jobs/retry-failed")
+async def retry_all_failed():
+    """Re-tenta faixas failed/cancelled em todos os jobs finalizados."""
+    retried_jobs = []
+    for job in list(_jobs.values()):
+        if job["status"] not in ("completed", "cancelled", "error"):
+            continue
+        retryable = [t for t in job["tracks"] if t["status"] in ("failed", "cancelled")]
+        if not retryable:
+            continue
+        job["failed_count"] -= sum(1 for t in retryable if t["status"] == "failed")
+        job["done"] -= len(retryable)
+        for t in retryable:
+            t["status"] = "pending"
+            t["error"] = None
+        job["status"] = "downloading"
+        job["auto_retry_attempt"] = 0
+        _cancel_events[job["id"]] = asyncio.Event()
+        dest_dir = str(Path(OUTPUT_DIR) / (job["playlist_name"] or ""))
+        asyncio.create_task(_run_download_phase(job, dest_dir))
+        await save_job(job)
+        retried_jobs.append(job)
+    return {"retried": len(retried_jobs), "jobs": retried_jobs}
 
 
 @app.post("/api/jobs/{job_id}/retry")
@@ -329,50 +355,78 @@ async def _run_job(job_id: str):
 
 async def _run_download_phase(job: dict, dest_dir: str):
     Path(dest_dir).mkdir(parents=True, exist_ok=True)
-    sem = asyncio.Semaphore(3)
-    cancel_event = _cancel_events[job["id"]]
-    pending = [t for t in job["tracks"] if t["status"] == "pending"]
-    # marca o início para o frontend calcular velocidade/ETA
-    job["download_started_at"] = datetime.now().isoformat()
-    job["done_at_start"] = job["done"]
 
-    async def download_one(track_state: dict):
-        if cancel_event.is_set():
-            track_state["status"] = "cancelled"
-            job["done"] += 1
-            return
+    while True:
+        cancel_event = _cancel_events[job["id"]]
+        pending = [t for t in job["tracks"] if t["status"] == "pending"]
+        job["download_started_at"] = datetime.now().isoformat()
+        job["done_at_start"] = job["done"]
+        sem = asyncio.Semaphore(3)
 
-        async with sem:
-            if cancel_event.is_set():
+        async def download_one(track_state: dict, _ce=cancel_event, _sem=sem):
+            if _ce.is_set():
                 track_state["status"] = "cancelled"
                 job["done"] += 1
                 return
 
-            track_state["status"] = "downloading"
-            result = await asyncio.to_thread(
-                download_track,
-                track_state["artist"],
-                track_state["title"],
-                dest_dir,
-                album=track_state.get("album"),
-                track_number=track_state.get("track_number"),
-                cover_url=track_state.get("cover_url"),
-                release_date=track_state.get("release_date"),
-                filename_template=job.get("filename_template", DEFAULT_TEMPLATE),
-            )
+            async with _sem:
+                if _ce.is_set():
+                    track_state["status"] = "cancelled"
+                    job["done"] += 1
+                    return
 
-        track_state["status"] = result.status
-        track_state["error"] = result.error
-        job["done"] += 1
-        if result.status == "skipped":
-            job["skipped"] += 1
-        elif result.status == "failed":
-            job["failed_count"] += 1
+                track_state["status"] = "downloading"
 
-        await save_job(job)
+                def on_speed(bps: float) -> None:
+                    track_state["speed_bps"] = bps
 
-    await asyncio.gather(*[download_one(t) for t in pending])
-    job["status"] = "cancelled" if cancel_event.is_set() else "completed"
+                result = await asyncio.to_thread(
+                    download_track,
+                    track_state["artist"],
+                    track_state["title"],
+                    dest_dir,
+                    album=track_state.get("album"),
+                    track_number=track_state.get("track_number"),
+                    cover_url=track_state.get("cover_url"),
+                    release_date=track_state.get("release_date"),
+                    filename_template=job.get("filename_template", DEFAULT_TEMPLATE),
+                    speed_callback=on_speed,
+                )
+
+            track_state["speed_bps"] = None
+            track_state["status"] = result.status
+            track_state["error"] = result.error
+            job["done"] += 1
+            if result.status == "skipped":
+                job["skipped"] += 1
+            elif result.status == "failed":
+                job["failed_count"] += 1
+            await save_job(job)
+
+        await asyncio.gather(*[download_one(t) for t in pending])
+
+        if cancel_event.is_set():
+            job["status"] = "cancelled"
+            await save_job(job)
+            return
+
+        # Auto-retry: re-tenta faixas failed até MAX_AUTO_RETRIES vezes
+        failed = [t for t in job["tracks"] if t["status"] == "failed"]
+        attempt = job.get("auto_retry_attempt", 0)
+        if failed and attempt < MAX_AUTO_RETRIES:
+            job["auto_retry_attempt"] = attempt + 1
+            job["failed_count"] -= len(failed)
+            job["done"] -= len(failed)
+            for t in failed:
+                t["status"] = "pending"
+                t["error"] = None
+            _cancel_events[job["id"]] = asyncio.Event()
+            await save_job(job)
+            continue
+
+        break
+
+    job["status"] = "completed"
     await save_job(job)
 
 
