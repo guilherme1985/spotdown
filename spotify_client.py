@@ -1,4 +1,5 @@
 import os
+import threading
 
 import spotipy
 from dotenv import load_dotenv
@@ -10,6 +11,41 @@ load_dotenv()
 
 _client: Spotdl | None = None
 _search_client: spotipy.Spotify | None = None
+
+# spotdl trava indefinidamente (sem lançar exceção) ao buscar playlists
+# algorítmicas do Spotify (Daily Mix, Discover Weekly etc.), que não são
+# acessíveis via Client Credentials. Um timeout evita que o app fique preso.
+SPOTIFY_FETCH_TIMEOUT = int(os.getenv("SPOTIFY_FETCH_TIMEOUT", "30"))
+
+
+class _TimeoutError(Exception):
+    pass
+
+
+def _run_with_timeout(fn, args, timeout):
+    """Roda `fn(*args)` em thread daemon e aplica um timeout.
+
+    Usa uma thread daemon (em vez de ThreadPoolExecutor) porque o processo
+    não pode esperar essa thread terminar no shutdown: se `fn` travar para
+    sempre, uma thread não-daemon prenderia o interpretador na saída mesmo
+    depois do timeout já ter sido reportado ao chamador.
+    """
+    result: dict = {}
+
+    def _target():
+        try:
+            result["value"] = fn(*args)
+        except Exception as e:
+            result["error"] = e
+
+    thread = threading.Thread(target=_target, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        raise _TimeoutError()
+    if "error" in result:
+        raise result["error"]
+    return result["value"]
 
 
 def _get_client() -> Spotdl:
@@ -127,7 +163,13 @@ def get_playlist_tracks(url: str, query_type: str = "url") -> tuple[str, list[di
 
     client = _get_client()
     try:
-        songs = client.search([url])
+        songs = _run_with_timeout(client.search, ([url],), SPOTIFY_FETCH_TIMEOUT)
+    except _TimeoutError:
+        raise ValueError(
+            "Tempo esgotado ao buscar a playlist no Spotify. Playlists algorítmicas "
+            "(Daily Mix, Discover Weekly, Top 50 etc.) não são suportadas — use apenas "
+            "playlists públicas criadas por usuários."
+        )
     except Exception as e:
         raise ValueError(f"Erro ao buscar no Spotify: {e}") from e
 
