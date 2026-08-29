@@ -15,7 +15,10 @@ _search_client: spotipy.Spotify | None = None
 # spotdl trava indefinidamente (sem lançar exceção) ao buscar playlists
 # algorítmicas do Spotify (Daily Mix, Discover Weekly etc.), que não são
 # acessíveis via Client Credentials. Um timeout evita que o app fique preso.
-SPOTIFY_FETCH_TIMEOUT = int(os.getenv("SPOTIFY_FETCH_TIMEOUT", "30"))
+# client.search() também faz o matching de cada faixa no YouTube/YTM na mesma
+# chamada (não é só metadado do Spotify), então playlists grandes e legítimas
+# podem levar mais de um minuto — o timeout precisa de folga para isso.
+SPOTIFY_FETCH_TIMEOUT = int(os.getenv("SPOTIFY_FETCH_TIMEOUT", "150"))
 
 
 class _TimeoutError(Exception):
@@ -166,9 +169,10 @@ def get_playlist_tracks(url: str, query_type: str = "url") -> tuple[str, list[di
         songs = _run_with_timeout(client.search, ([url],), SPOTIFY_FETCH_TIMEOUT)
     except _TimeoutError:
         raise ValueError(
-            "Tempo esgotado ao buscar a playlist no Spotify. Playlists algorítmicas "
-            "(Daily Mix, Discover Weekly, Top 50 etc.) não são suportadas — use apenas "
-            "playlists públicas criadas por usuários."
+            f"Tempo esgotado ({SPOTIFY_FETCH_TIMEOUT}s) ao buscar a playlist no Spotify. "
+            "Pode ser uma playlist algorítmica (Daily Mix, Discover Weekly, Top 50 etc.), "
+            "que não é suportada, ou apenas uma playlist grande demorando para processar — "
+            "nesse caso, tente de novo ou aumente a variável SPOTIFY_FETCH_TIMEOUT."
         )
     except Exception as e:
         raise ValueError(f"Erro ao buscar no Spotify: {e}") from e

@@ -13,6 +13,7 @@ services:
       DOWNLOAD_DIR: downloads
       DB_DIR: data
       DOWNLOAD_RETRIES: "2"   # tentativas extras em erros transitórios por faixa
+      SPOTIFY_FETCH_TIMEOUT: "150"   # segundos para buscar a playlist no Spotify
       # HOME é definido pelo entrypoint (após o gosu), não aqui.
       # O entrypoint sobe como root, faz chown da pasta downloads para PUID:PGID
       # (corrige arquivos antigos criados como root) e dropa o privilégio via gosu.

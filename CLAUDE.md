@@ -81,6 +81,7 @@ Jobs são salvos no SQLite após cada mudança de status de faixa. Ao reiniciar,
 | `SPOTIFY_CLIENT_SECRET` | — | obrigatório |
 | `MAX_TRACKS_PER_PLAYLIST` | `50` | trunca playlists maiores |
 | `DOWNLOAD_DIR` | `downloads` | pasta de saída dos MP3s e do `jobs.db` |
+| `SPOTIFY_FETCH_TIMEOUT` | `150` | segundos para buscar a playlist no Spotify (inclui matching no YouTube por faixa) antes de desistir |
 
 ## Estrutura de saída
 
